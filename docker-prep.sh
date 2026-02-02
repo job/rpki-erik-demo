@@ -36,4 +36,3 @@ wget https://ftp.openssl.org/source/openssl-1.0.2p.tar.gz \
     && ./config enable-rfc3779 \
     && make \
     && make install
-yes | unminimize

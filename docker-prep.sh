@@ -30,7 +30,7 @@ apt-get install -y \
     libexpat1-dev \
     sudo
 cpanm Set::IntSpan Net::CIDR::Set
-wget https://ftp.openssl.org/source/openssl-1.0.2p.tar.gz \
+wget https://github.com/openssl/openssl/releases/download/OpenSSL_1_0_2p/openssl-1.0.2p.tar.gz \
     && tar xf openssl-1.0.2p.tar.gz \
     && cd openssl-1.0.2p \
     && ./config enable-rfc3779 \

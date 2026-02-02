@@ -1,6 +1,6 @@
 #!/bin/sh
-RUN apt-get update -y
-RUN apt-get install -y \
+apt-get update -y
+apt-get install -y \
     libhttp-daemon-perl \
     liblist-moreutils-perl \
     libwww-perl \
@@ -29,11 +29,11 @@ RUN apt-get install -y \
     libdigest-sha-perl \
     libexpat1-dev \
     sudo
-RUN cpanm Set::IntSpan Net::CIDR::Set
-RUN wget https://ftp.openssl.org/source/openssl-1.0.2p.tar.gz \
+cpanm Set::IntSpan Net::CIDR::Set
+wget https://ftp.openssl.org/source/openssl-1.0.2p.tar.gz \
     && tar xf openssl-1.0.2p.tar.gz \
     && cd openssl-1.0.2p \
     && ./config enable-rfc3779 \
     && make \
     && make install
-RUN yes | unminimize
+yes | unminimize

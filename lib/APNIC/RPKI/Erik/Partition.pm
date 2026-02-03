@@ -9,6 +9,7 @@ use Convert::ASN1;
 use DateTime;
 
 use constant ID_SHA256 => '2.16.840.1.101.3.4.2.1';
+use constant CT_EP     => '1.2.840.113549.1.9.16.1.56';
 
 use base qw(Class::Accessor);
 APNIC::RPKI::Erik::Partition->mk_accessors(qw(
@@ -41,6 +42,11 @@ sub decode
         die $parser->error();
     }
 
+    my $ct = $data->{'contentType'};
+    if ($ct ne CT_EP()) {
+        die "Unexpected content type '$ct' (expected '".CT_EP()."')";
+    }
+
     my $partition = $data->{'partition'};
     $self->partition_time(DateTime->from_epoch(epoch => $partition->{'partitionTime'}));
 
@@ -70,7 +76,7 @@ sub encode
     my ($self) = @_;
 
     my $data = {
-        contentType => ID_SHA256(),
+        contentType => CT_EP(),
         partition => {
             partitionTime => $self->partition_time()->epoch(),
             hashAlg => {

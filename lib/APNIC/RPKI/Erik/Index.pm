@@ -9,6 +9,7 @@ use Convert::ASN1;
 use DateTime;
 
 use constant ID_SHA256 => '2.16.840.1.101.3.4.2.1';
+use constant CT_IN     => '1.2.840.113549.1.9.16.1.55';
 
 use base qw(Class::Accessor);
 APNIC::RPKI::Erik::Index->mk_accessors(qw(
@@ -42,6 +43,11 @@ sub decode
         die $parser->error();
     }
 
+    my $ct = $data->{'contentType'};
+    if ($ct ne CT_IN()) {
+        die "Unexpected content type '$ct' (expected '".CT_IN()."')";
+    }
+
     my $index = $data->{'index'};
     $self->index_scope($index->{'indexScope'});
     $self->index_time(DateTime->from_epoch(epoch => $index->{'indexTime'}));
@@ -68,7 +74,7 @@ sub encode
     my ($self) = @_;
 
     my $data = {
-        contentType => ID_SHA256(),
+        contentType => CT_IN(),
         index => {
             indexScope => $self->index_scope(),
             indexTime => $self->index_time()->epoch(),

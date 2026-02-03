@@ -65,10 +65,15 @@ sub verify_cms
     my $ft_output = File::Temp->new();
     my $fn_output = $ft_output->filename();
 
+    my $extra =
+        (not defined $ca_cert)
+            ? "-noverify"
+            : "-CAfile $ca_cert";
+
     my $openssl = $self->get_openssl_path();
     system_ad("$openssl cms -verify -inform DER ".
               "-in $input ".
-              "-CAfile $ca_cert ".
+              " $extra ".
               "-out $fn_output",
               $self->{'debug'});
 

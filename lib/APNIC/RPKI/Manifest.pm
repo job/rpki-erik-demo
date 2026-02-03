@@ -89,10 +89,10 @@ sub decode
         }
         push @files, {
             filename => $file->{'file'},
-            hash     => $file->{'hash'}->[0]
+            hash     => unpack('H*', $file->{'hash'}->[0])
         };
     }
-    $self->files(@files);
+    $self->files(\@files);
 
     return 1;
 }

@@ -63,7 +63,9 @@ sub decode
             aki             => unpack('H*', $ml->{'aki'}),
             manifest_number => $ml->{'manifestNumber'},
             this_update     => DateTime->from_epoch(epoch => $ml->{'thisUpdate'}),
-            locations       => $ml->{'locations'}
+            locations       => [ map {
+                $_->{'accessLocation'}->{'uniformResourceIdentifier'}
+            } @{$ml->{'locations'}} ]
         };
     }
     $self->manifest_list(\@manifest_list);

@@ -7,9 +7,10 @@ use APNIC::RPKI::Erik::Partition;
 
 use DateTime;
 use File::Slurp qw(read_file write_file);
-use MIME::Base64 qw(decode_base64);
+use MIME::Base64 qw(decode_base64 encode_base64url);
+use Digest::SHA qw(sha256);
 
-use Test::More tests => 6;
+use Test::More tests => 7;
 
 my $path = "eg/AZmwyRKvBFv4DPl2g5IAhM8BbDvVWzZvgBLjORCoXqM.b64"; 
 
@@ -55,6 +56,17 @@ my $path = "eg/AZmwyRKvBFv4DPl2g5IAhM8BbDvVWzZvgBLjORCoXqM.b64";
     @manifest_list = @{$partition2->manifest_list()};
     my $count = scalar @manifest_list;
     is($count, 2, "Decoded manifest list successfully");
+}
+
+{
+    my $data_encoded = read_file($path);    
+    my $data = decode_base64($data_encoded);
+    my $digest_data = sha256($data);
+    my $digest_base64 = encode_base64url($digest_data);
+    $path =~ s/^...//;
+    $path =~ s/.b64$//;
+    is($path, $digest_base64,
+        "Example file has correct filename");
 }
 
 1;

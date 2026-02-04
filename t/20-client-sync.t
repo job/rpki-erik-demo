@@ -12,18 +12,24 @@ use DateTime;
 use File::Temp qw(tempdir);
 use File::Slurp qw(read_file write_file);
 
-use Test::More tests => 2;
+use Test::More tests => 9;
 
 my $pid;
 
 {
+    my $rtd = tempdir(CLEANUP => 1);
+    system("cp -r eg/repo/* $rtd/");
+
     my $cwd = cwd();
     my $td = tempdir(CLEANUP => 1);
-    my $updater =
-        APNIC::RPKI::Erik::Updater->new(
-            "eg/repo", $td
-        );
-    $updater->synchronise();
+    my $updater = APNIC::RPKI::Erik::Updater->new($rtd, $td);
+    eval {
+        $updater->synchronise();
+    };
+    my $error = $@;
+    ok((not $error),
+        "Wrote Erik disk state successfully");
+    diag $error if $error;
 
     my $server = APNIC::RPKI::Erik::Server->new(0, $td);
     my $port = $server->{'port'};
@@ -38,14 +44,56 @@ my $pid;
     eval {
         $client->synchronise("localhost:$port", ["rpki.roa.net"]);
     };
-    my $error = $@;
+    $error = $@;
     ok((not $error),
         "Synchronised remote content successfully");
     diag $error if $error;
 
     chdir $cwd or die $!;
-    my @differences = `diff -r eg/repo $otd`;
+    my @differences = `diff -r $rtd $otd`;
     ok((not @differences), "Synchronisation result matches original");
+    diag @differences;
+
+    system("cp -r eg/repo2/61 $rtd/rpki.roa.net/rrdp/xTom/");
+    eval {
+        $updater->synchronise();
+    };
+    $error = $@;
+    ok((not $error),
+        "Updated Erik disk state successfully");
+    diag $error if $error;
+
+    eval {
+        $client->synchronise("localhost:$port", ["rpki.roa.net"]);
+    };
+    $error = $@;
+    ok((not $error),
+        "Resynchronised remote content successfully");
+    diag $error if $error;
+    
+    @differences = `diff -r $rtd $otd`;
+    ok((not @differences), "Resynchronisation result matches original");
+    diag @differences;
+
+    system("rm -rf $rtd/rpki.roa.net/rrdp/xTom/61");
+    eval {
+        $updater->synchronise();
+    };
+    $error = $@;
+    ok((not $error),
+        "Updated Erik disk state successfully");
+    diag $error if $error;
+
+    eval {
+        $client->synchronise("localhost:$port", ["rpki.roa.net"]);
+    };
+    $error = $@;
+    ok((not $error),
+        "Resynchronised remote content successfully");
+    diag $error if $error;
+    
+    @differences = `diff -r $rtd $otd`;
+    ok((not @differences), "Resynchronisation result matches original");
     diag @differences;
 }
 

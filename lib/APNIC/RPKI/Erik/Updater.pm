@@ -145,7 +145,7 @@ sub synchronise
         chomp $file;
         $file =~ s/^\.\///;
         if (not $written_files{$file}) {
-            print "removing $file\n";
+            dprint("Removing '$file' (deleted)");
             unlink $file or die $!;
         }
     }

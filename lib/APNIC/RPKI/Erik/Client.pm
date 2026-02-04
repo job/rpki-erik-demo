@@ -9,6 +9,7 @@ use APNIC::RPKI::Manifest;
 use APNIC::RPKI::OpenSSL;
 use APNIC::RPKI::Utils qw(dprint);
 
+use Cwd qw(cwd);
 use File::Slurp qw(read_file write_file);
 use LWP::UserAgent;
 use MIME::Base64 qw(encode_base64url);
@@ -47,7 +48,10 @@ sub synchronise
     my $dir     = $self->{'dir'};
     my $openssl = $self->{'openssl'};
 
+    my $cwd = cwd();
+
     for my $fqdn (@{$fqdns}) {
+        my %relevant_files;
         dprint("Synchronising '$fqdn'");
         my $base_url = "http://$hostname/.well-known";
         my $index_url = "$base_url/erik/index/$fqdn";
@@ -101,6 +105,7 @@ sub synchronise
                 my $path = $uri->path();
                 $path =~ s/^\///;
                 $path = $uri->host()."/$path";
+                $relevant_files{$path} = 1;
                 my ($pdir) = ($path =~ /^(.*)\//);
                 my ($file) = ($path =~ /^.*\/(.*)$/);
                 chdir $dir or die $!;
@@ -151,6 +156,7 @@ sub synchronise
                         } else {
                             $get = 1;
                         }
+                        $relevant_files{$fpath} = 1;
                         if ($get) {
                             my $o_url = hash_to_url($hostname, $hash);
                             dprint("Fetching file '$o_url'");
@@ -168,10 +174,42 @@ sub synchronise
                     }
                 } else {
                     dprint("Do not need to fetch manifest '$location'");
+
+		    my $mdata = $openssl->verify_cms($path);
+                    my $manifest = APNIC::RPKI::Manifest->new();
+                    $manifest->decode($mdata);
+                    my @files = @{$manifest->files() || []};
+                    my $file_count = scalar @files;
+                    for my $file (@files) {
+                        my $filename = $file->{'filename'};
+                        my $hash = $file->{'hash'};
+                        my $fpath = "$pdir/$filename";
+                        $relevant_files{$fpath} = 1;
+                    }
                 }
             }
         }
+
+	chdir $dir or die $!;
+	my @files = `find $fqdn -type f`;
+	for my $file (@files) {
+	    chomp $file;
+	    $file =~ s/^\.\///;
+	    if (not $relevant_files{$file}) {
+		dprint("Removing '$file' (deleted)");
+		unlink $file or die $!;
+	    }
+	} 
+
+	my @empty_dirs = `find $fqdn -type d -empty`;
+	for my $empty_dir (@empty_dirs) {
+	    chomp $empty_dir;
+            dprint("Removing '$empty_dir' (empty directory)");
+            rmdir $empty_dir or die $!;
+	} 
     }
+
+    chdir $cwd;
 
     return 1;
 }

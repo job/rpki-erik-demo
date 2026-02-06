@@ -14,7 +14,11 @@ use constant ERIK_ASN1 => q(
 
   Digest ::= OCTET STRING
 
-  DigestAlgorithmIdentifier ::= OBJECT IDENTIFIER
+  AlgorithmIdentifier ::= SEQUENCE {
+    algorithm      OBJECT IDENTIFIER,
+    parameters     ANY DEFINED BY algorithm OPTIONAL }
+
+  DigestAlgorithmIdentifier ::= AlgorithmIdentifier
 
   KeyIdentifier ::= OCTET STRING
 
@@ -22,18 +26,11 @@ use constant ERIK_ASN1 => q(
     accessMethod   OBJECT IDENTIFIER,
     accessLocation GeneralName }
 
-  AlgorithmIdentifier ::= SEQUENCE {
-    algorithm      OBJECT IDENTIFIER,
-    parameters     ANY DEFINED BY algorithm OPTIONAL }
-
   ErikIndex ::= SEQUENCE {
     version [0]    INTEGER OPTIONAL, -- DEFAULT 0,
     indexScope     IA5String,
     indexTime      GeneralizedTime,
-    -- Draft has DigestAlgorithmIdentifier, but rpkitouch uses
-    -- AlgorithmIdentifier.
-    -- hashAlg        DigestAlgorithmIdentifier,
-    hashAlg        AlgorithmIdentifier,
+    hashAlg        DigestAlgorithmIdentifier,
     partitionList  SEQUENCE OF PartitionRef }
 
   PartitionRef ::= SEQUENCE {
@@ -43,10 +40,7 @@ use constant ERIK_ASN1 => q(
   ErikPartition ::= SEQUENCE {
     version [0]    INTEGER OPTIONAL, -- DEFAULT 0,
     partitionTime  GeneralizedTime,
-    -- Draft has DigestAlgorithmIdentifier, but rpkitouch uses
-    -- AlgorithmIdentifier.
-    -- hashAlg        DigestAlgorithmIdentifier,
-    hashAlg        AlgorithmIdentifier,
+    hashAlg        DigestAlgorithmIdentifier,
     manifestList   SEQUENCE OF ManifestRef }
 
   ManifestRef ::= SEQUENCE {

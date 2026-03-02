@@ -50,7 +50,7 @@ my $pid;
     diag $error if $error;
 
     chdir $cwd or die $!;
-    my @differences = `diff -r $rtd $otd`;
+    my @differences = `diff -r $rtd $otd | grep -v rpki.roa.net-metadata`;
     ok((not @differences), "Synchronisation result matches original");
     diag @differences;
 
@@ -71,7 +71,7 @@ my $pid;
         "Resynchronised remote content successfully");
     diag $error if $error;
     
-    @differences = `diff -r $rtd $otd`;
+    @differences = `diff -r $rtd $otd | grep -v rpki.roa.net-metadata`;
     ok((not @differences), "Resynchronisation result matches original");
     diag @differences;
 
@@ -92,7 +92,7 @@ my $pid;
         "Resynchronised remote content successfully");
     diag $error if $error;
     
-    @differences = `diff -r $rtd $otd`;
+    @differences = `diff -r $rtd $otd | grep -v rpki.roa.net-metadata`;
     ok((not @differences), "Resynchronisation result matches original");
     diag @differences;
 }

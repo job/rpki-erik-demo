@@ -57,16 +57,19 @@ sub synchronise
         s/^\.\///;
     }
     my %fqdn_to_pd;
+    my %fqdn_to_manifests;
     my %written_files;
     my $file_count = scalar(@files);
     dprint("Updater file count: '$file_count'");
 
     my $mpp = $self->{'mft_per_partition'} || 1;
+    my @fqdn_to_manifests;
 
     for my $file (@files) {
         dprint("Processing file '$file'");
         my ($fqdn) = ($file =~ /^(.*?)\//);
         $fqdn_to_pd{$fqdn} ||= [];
+        $fqdn_to_manifests{$fqdn} ||= [];
         my ($ext) = ($file =~ /\.([a-z]*)$/);
 
         my $digest = Digest::SHA->new(256);
@@ -77,41 +80,8 @@ sub synchronise
 
         if ($ext eq "mft") {
             dprint("File is a manifest");
-	    my $mdata = $openssl->verify_cms($file);
-	    my $manifest = APNIC::RPKI::Manifest->new();
-	    $manifest->decode($mdata);
-            my $tu = $manifest->this_update();
-            my $partition_hash = $digest_hexdata;
-            my %mldet = (
-                hash            => $partition_hash,
-                size            => ((stat($file))[7]),
-                aki             => "aki",
-                manifest_number => $manifest->manifest_number(),
-                this_update     => $tu,
-                locations       => [ "rsync://$file" ]
-            );
-
-            my $partitions = $fqdn_to_pd{$fqdn};
-            if (@{$partitions}) {
-                my $partition = $partitions->[$#{$partitions}];
-                if (@{$partition->manifest_list()} >= $mpp) {
-                    my $partition = APNIC::RPKI::Erik::Partition->new();
-                    $partition->partition_time($tu);
-                    $partition->manifest_list([ \%mldet ]);
-                    push @{$partitions}, $partition;
-                } else {
-                    my $current_tu = $partition->partition_time();
-                    if ($tu > $current_tu) {
-                        $partition->partition_time($tu);
-                    }
-                    push @{$partition->manifest_list()}, \%mldet;
-                }
-            } else {
-                my $partition = APNIC::RPKI::Erik::Partition->new();
-                $partition->partition_time($tu);
-                $partition->manifest_list([ \%mldet ]);
-                push @{$partitions}, $partition;
-            }
+            push @{$fqdn_to_manifests{$fqdn}},
+                 [$file, $digest_hexdata];
         }
 
         my $new_path = "$httpd_dir/$ni_path/$path_segment";
@@ -126,7 +96,46 @@ sub synchronise
     }
 
     for my $fqdn (keys %fqdn_to_pd) {
+        my @manifest_details = @{$fqdn_to_manifests{$fqdn}};
         my @partitions = @{$fqdn_to_pd{$fqdn}};
+        for my $manifest_detail (@manifest_details) {
+            my ($file, $hash) = @{$manifest_detail};
+
+	    my $mdata = $openssl->verify_cms($file);
+	    my $manifest = APNIC::RPKI::Manifest->new();
+	    $manifest->decode($mdata);
+            my $tu = $manifest->this_update();
+            my %mldet = (
+                hash            => $hash,
+                size            => ((stat($file))[7]),
+                aki             => "aki",
+                manifest_number => $manifest->manifest_number(),
+                this_update     => $tu,
+                locations       => [ "rsync://$file" ]
+            );
+
+            if (@partitions) {
+                my $partition = $partitions[$#partitions];
+                if (@{$partition->manifest_list()} >= $mpp) {
+                    my $partition = APNIC::RPKI::Erik::Partition->new();
+                    $partition->partition_time($tu);
+                    $partition->manifest_list([ \%mldet ]);
+                    push @partitions, $partition;
+                } else {
+                    my $current_tu = $partition->partition_time();
+                    if ($tu > $current_tu) {
+                        $partition->partition_time($tu);
+                    }
+                    push @{$partition->manifest_list()}, \%mldet;
+                }
+            } else {
+                my $partition = APNIC::RPKI::Erik::Partition->new();
+                $partition->partition_time($tu);
+                $partition->manifest_list([ \%mldet ]);
+                push @partitions, $partition;
+            }
+        }
+
         my @pds;
         for my $partition (@partitions) {
             my $pcontent = $partition->encode();

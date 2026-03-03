@@ -13,6 +13,7 @@ use Cwd qw(cwd);
 use Digest::SHA;
 use File::Path qw(mkpath);
 use File::Slurp qw(read_file write_file);
+use JSON::XS qw(encode_json);
 use MIME::Base64 qw(encode_base64url);
 
 sub new
@@ -27,6 +28,54 @@ sub new
     };
     bless $self, $class;
     return $self;
+}
+
+sub write_rpki_file
+{
+    my ($self, $source_path, $filename, $content) = @_;
+
+    dprint("Writing RPKI file ($filename)");
+
+    my $dir = cwd();
+    my $dir_count = $self->{'dir_count'} || 0;
+    my $cc = $self->{'char_count'} || 0;
+    my $httpd_dir = $self->{'httpd_dir'};
+    my $ni_path = ".well-known/ni/sha-256";
+    my $current_dir = "$httpd_dir/$ni_path";
+
+    my $remaining_fn = $filename;
+    if ($dir_count and not $cc) {
+        die "If dir_count is set, char_count must also be set";
+    }
+    while ($dir_count--) {
+        my ($next_chars) = ($remaining_fn =~ /^(.{$cc})/);
+        $remaining_fn =~ s/^.{$cc}//;
+        if (not $remaining_fn) {
+            die "Too many characters taken from filename";
+        }
+        eval { mkpath("$current_dir/$next_chars") };
+        if (my $error = $@) {
+            die "Unable to make NI directory: $error";
+        }
+        $current_dir = "$current_dir/$next_chars";
+    }
+
+    chdir $current_dir;
+    # todo: these two operations should happen atomically.
+    unlink $remaining_fn;
+    my $new_path = "$current_dir/$remaining_fn";
+    if ($source_path) {
+        my $res = symlink($source_path, $new_path);
+        if (not $res) {
+            die "Unable to link $source_path into httpd directory: $!";
+        }
+    } else {
+        write_file($new_path, $content);
+    }
+    dprint("Linked file to '$new_path'");
+    chdir $dir;
+
+    return $new_path;
 }
 
 sub synchronise
@@ -83,15 +132,10 @@ sub synchronise
                  [$file, $digest_hexdata];
         }
 
-        my $new_path = "$httpd_dir/$ni_path/$path_segment";
+        my $new_path =
+            $self->write_rpki_file("$cache_dir/$file",
+                                   $path_segment);
         $written_files{$new_path} = 1;
-        # todo: these two operations should happen atomically.
-        unlink $new_path;
-        my $res = symlink("$cache_dir/$file", $new_path);
-        if (not $res) {
-            die "Unable to link $file into httpd directory: $!";
-        }
-        dprint("Linked file to '$new_path'");
     }
 
     my $mpp = $self->{'mft_per_partition'} || 1;
@@ -164,9 +208,10 @@ sub synchronise
             my $pdigest_hexdata = $pdigest->clone()->hexdigest();
             my $ppath_segment = encode_base64url($pdigest_data);
 
-            my $new_path = "$httpd_dir/$ni_path/$ppath_segment";
+            my $new_path = $self->write_rpki_file(
+                undef, $ppath_segment, $pcontent
+            );
             $written_files{$new_path} = 1;
-            write_file($new_path, $pcontent);
             dprint("Wrote new partition for manifest to '$new_path'");
 
             my $index_partition_hash = $pdigest_hexdata;
@@ -194,6 +239,15 @@ sub synchronise
         $written_files{$new_path} = 1;
         write_file($new_path, $icontent);
     }
+
+    my $dir_count = $self->{'dir_count'} || 0;
+    my $cc = $self->{'char_count'} || 0;
+
+    my $md_path = "$httpd_dir/.well-known/erik/metadata";
+    write_file($md_path,
+               encode_json({ dir_count  => $dir_count,
+                             char_count => $cc }));
+    $written_files{$md_path} = 1;
 
     chdir "/" or die $!;
     @files = `find $httpd_dir -type f`;

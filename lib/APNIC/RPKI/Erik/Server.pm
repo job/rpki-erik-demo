@@ -5,8 +5,10 @@ use strict;
 
 use APNIC::RPKI::Utils qw(dprint);
 
+use File::Slurp qw(read_file);
 use HTTP::Daemon;
 use HTTP::Status qw(:constants);
+use JSON::XS qw(decode_json);
 
 sub new
 {
@@ -41,11 +43,32 @@ sub run
     my $d = $self->{"d"};
     while (my $c = $d->accept()) {
         while (my $r = $c->get_request()) {
+            dprint("Beginning request handling");
             chdir $self->{"httpd_dir"} or die $!;
+            my $metadata = read_file(".well-known/erik/metadata");
+            my $md = decode_json($metadata);
+            my $cc = $md->{'char_count'};
+            my $dc = $md->{'dir_count'};
+
             my $method = $r->method();
             my $path = $r->uri()->path();
             dprint("Received request: '$method' '$path'");
             $path =~ s/^\///;
+
+            my ($remaining_fn) = ($path =~ /^.well-known\/ni\/sha-256\/(.*)$/);
+            if ($remaining_fn) {
+                my $current_dir = ".well-known/ni/sha-256";
+                while ($dc--) {
+                    my ($next_chars) = ($remaining_fn =~ /^(.{$cc})/);
+                    $remaining_fn =~ s/^.{$cc}//;
+                    if (not $remaining_fn) {
+                        die "Too many characters taken from filename";
+                    }
+                    $current_dir = "$current_dir/$next_chars";
+                }
+                $path = "$current_dir/$remaining_fn";
+            }
+
             my $res;
             eval {
                 if ($method eq 'GET') {

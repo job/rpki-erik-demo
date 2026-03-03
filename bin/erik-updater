@@ -12,16 +12,24 @@ sub usage
     print <<EOF;
 Usage:
 $0 --cache-dir {cache-dir} --httpd-dir {httpd-dir}
+   [--dir-count {dir-count} --char-count {char-count}]
 
 Writes Erik content to httpd-dir, based on the current state of
 cache-dir.
+
+The dir-count and char-count values are used to construct a directory
+hierarchy for file storage.  Each file is stored has dir-count groups
+of char-count characters removed from its front, with each group
+forming another directory in the hierarchy.  By default, both values
+are zero (i.e. all files are stored in a single directory).
 EOF
 
     exit(10);
 }
 
 my %options;
-GetOptions(\%options, 'cache-dir=s', 'httpd-dir=s');
+GetOptions(\%options, 'cache-dir=s', 'httpd-dir=s',
+                      'dir-count=i', 'char-count=i');
 if (not $options{'cache-dir'}) {
     print "Please provide a cache directory.\n";
     usage();
@@ -31,10 +39,17 @@ if (not $options{'httpd-dir'}) {
     usage();
 }
 
-my $cache_dir = $options{'cache-dir'};
-my $httpd_dir = $options{'httpd-dir'};
+my $cache_dir  = $options{'cache-dir'};
+my $httpd_dir  = $options{'httpd-dir'};
+my $dir_count  = $options{'dir-count'} || 0;
+my $char_count = $options{'char-count'} || 0;
 
-my $updater = APNIC::RPKI::Erik::Updater->new($cache_dir, $httpd_dir);
+my $updater =
+    APNIC::RPKI::Erik::Updater->new(
+        $cache_dir, $httpd_dir,
+        dir_count  => $dir_count,
+        char_count => $char_count
+    );
 $updater->synchronise();
 
 1;

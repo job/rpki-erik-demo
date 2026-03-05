@@ -43,7 +43,6 @@ sub run
     my $d = $self->{"d"};
     while (my $c = $d->accept()) {
         while (my $r = $c->get_request()) {
-            dprint("Beginning request handling");
             chdir $self->{"httpd_dir"} or die $!;
             my $metadata = read_file(".well-known/erik/metadata");
             my $md = decode_json($metadata);

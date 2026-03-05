@@ -12,6 +12,7 @@ sub usage
     print <<EOF;
 Usage:
 $0 --cache-dir {cache-dir} --server {host[:port]} --fqdn {fqdn}
+   [--use-snapshots]
 
 Synchronises the local cache against the specified server for the
 specified RPKI repository FQDN.
@@ -21,7 +22,8 @@ EOF
 }
 
 my %options;
-GetOptions(\%options, 'cache-dir=s', 'server=s', 'fqdn=s');
+GetOptions(\%options, 'cache-dir=s', 'server=s', 'fqdn=s',
+                      'use-snapshots');
 if (not $options{'cache-dir'}) {
     print "Please provide a cache directory.\n";
     usage();
@@ -38,8 +40,13 @@ if (not $options{'fqdn'}) {
 my $cache_dir = $options{'cache-dir'};
 my $server = $options{'server'};
 my $fqdn = $options{'fqdn'};
+my $use_snapshots = exists $options{'use-snapshots'} ? 1 : 0;
 
-my $client = APNIC::RPKI::Erik::Client->new($cache_dir);
+my $client =
+    APNIC::RPKI::Erik::Client->new(
+        $cache_dir,
+        use_snapshots => $use_snapshots
+    );
 $client->synchronise($server, [$fqdn]);
 
 1;

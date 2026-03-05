@@ -13,6 +13,7 @@ use Cwd qw(cwd);
 use Digest::SHA;
 use File::Path qw(mkpath);
 use File::Slurp qw(read_file write_file);
+use IO::Compress::Gzip;
 use JSON::XS qw(encode_json);
 use MIME::Base64 qw(encode_base64url);
 
@@ -107,6 +108,7 @@ sub synchronise
     }
     my %fqdn_to_pd;
     my %fqdn_to_manifests;
+    my %fqdn_to_path;
     my %written_files;
     my $file_count = scalar(@files);
     dprint("Updater file count: '$file_count'");
@@ -135,6 +137,7 @@ sub synchronise
         my $new_path =
             $self->write_rpki_file("$cache_dir/$file",
                                    $path_segment);
+        push @{$fqdn_to_path{$fqdn}}, $new_path;
         $written_files{$new_path} = 1;
     }
 
@@ -248,6 +251,29 @@ sub synchronise
                encode_json({ dir_count  => $dir_count,
                              char_count => $cc }));
     $written_files{$md_path} = 1;
+
+    if ($self->{'write_snapshots'}) {
+        for my $fqdn (keys %fqdn_to_path) {
+            mkpath("$httpd_dir/.well-known/erik/snapshot");
+            my $new_output_path =
+                "$httpd_dir/.well-known/erik/snapshot/$fqdn";
+            my $z = IO::Compress::Gzip->new(
+                $new_output_path
+            ) or die $!;
+            for my $path (@{$fqdn_to_path{$fqdn}}) {
+                open my $fh, "<", $path or die $!;
+                binmode($fh);
+                my $buffer;
+                my $bytes;
+                while ($bytes = read($fh, $buffer, 1024)) {
+                    $z->syswrite($buffer) or die $!;
+                }
+            }
+            $z->flush() or die $!;
+            $written_files{$new_output_path} = 1;
+            dprint("Wrote snapshot ($new_output_path)");
+        }
+    }
 
     chdir "/" or die $!;
     @files = `find $httpd_dir -type f`;

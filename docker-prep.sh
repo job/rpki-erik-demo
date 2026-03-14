@@ -41,11 +41,6 @@ apt-get install -y \
     libcgi-pm-perl \
     libhttp-server-simple-perl \
     libtest-http-server-simple-perl \
+    openssl \
     sudo
 cpanm Set::IntSpan Net::CIDR::Set
-wget https://github.com/openssl/openssl/releases/download/OpenSSL_1_0_2p/openssl-1.0.2p.tar.gz \
-    && tar xf openssl-1.0.2p.tar.gz \
-    && cd openssl-1.0.2p \
-    && ./config enable-rfc3779 \
-    && make \
-    && make install

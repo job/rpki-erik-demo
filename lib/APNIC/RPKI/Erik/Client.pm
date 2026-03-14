@@ -163,26 +163,40 @@ sub synchronise
                     if ($res != 0) {
                         die "unable to gunzip file";
                     }
-                    my $content = read_file($fn);
-                    
-                    while ($content) {
-                        my $rfb = substr($content, 0, 1);
+                    open my $fh, '<', $fn or die $!;
+                    for (;;) {
+                        my $rfb;
+                        my $n = read($fh, $rfb, 1);
+                        if (not $n) {
+                            last;
+                        }
                         my $fb = unpack('C', $rfb);
                         if ($fb != 0x30) {
                             die "Expected 0x30 for start of object";
                         }
-                        my $tlb = substr($content, 1, 1);
+                        my $tlb;
+                        $n = read($fh, $tlb, 1);
+                        if ($n != 1) {
+                            die "Expected additional byte after object";
+                        }
                         my $lb = unpack('C', $tlb);
                         my $new_object;
                         if ($lb <= 127) {
                             dprint("Got short object in snapshot/TTQ ($lb bytes)");
-                            $new_object = $rfb.$tlb.substr($content, 2, $lb);
-                            $content = substr($content, 2 + $lb);
+                            $new_object = $rfb.$tlb;
+                            $n = read($fh, $new_object, $lb, 2);
+                            if ($n != $lb) {
+                                die "Expected '$lb' bytes but got '$n'";
+                            }
                         } else {
                             my $elb = $lb & 127;
                             dprint("Got object in snapshot/TTQ ($elb extra ".
                                    "length bytes)");
-                            my $raw_rlb = substr($content, 2, $elb);
+                            my $raw_rlb;
+                            $n = read($fh, $raw_rlb, $elb);
+                            if ($n != $elb) {
+                                die "Expected '$elb' bytes but got '$n'";
+                            }
                             my @rlb = unpack('C*', $raw_rlb);
                             @rlb = reverse @rlb;
                             my $new_length = 0;
@@ -194,8 +208,12 @@ sub synchronise
                             }
                             dprint("Got object in snapshot/TTQ ($new_length ".
                                    "bytes)");
-                            $new_object = $rfb.$tlb.$raw_rlb.substr($content, 2 + $elb, $new_length);
-                            $content = substr($content, 2 + $elb + $new_length);
+                            $new_object = $rfb.$tlb.$raw_rlb;
+                            my $bytes = 2 + $elb;
+                            $n = read($fh, $new_object, $new_length, length($new_object));
+                            if ($n != $new_length) {
+                                die "Expected '$new_length' bytes but got '$n'";
+                            }
                         }
 
 			my $digest = Digest::SHA->new(256);

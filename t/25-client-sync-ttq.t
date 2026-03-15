@@ -60,7 +60,6 @@ my $pid;
     my $diff = sub {
         my @res =
             grep { !/local-erik-relay/ }
-            grep { !/rpki.roa.net-metadata/ }
                 `diff -r $rtd $otd`;
         @res
     };

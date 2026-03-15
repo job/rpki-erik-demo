@@ -89,7 +89,7 @@ sub write_rpki_file
 
 sub synchronise
 {
-    my ($self) = @_;
+    my ($self, $fqdn_to_sync) = @_;
 
     my $dir = cwd();
 
@@ -108,12 +108,14 @@ sub synchronise
         die "Unable to make Erik index directory: $error";
     }
 
+    dprint("Cache directory is '$cache_dir'");
     chdir $cache_dir or die $!;
     my @files = `find . -type f`;
     for (@files) {
         chomp;
         s/^\.\///;
     }
+    my %fqdn_to_pt_to_mft_to_file;
     my %fqdn_to_manifests;
     my %fqdn_to_path;
     my %written_files;
@@ -125,6 +127,9 @@ sub synchronise
     for my $file (@files) {
         dprint("Processing file '$file'");
         my ($fqdn) = ($file =~ /^(.*?)\//);
+        if ($fqdn_to_sync and ($fqdn ne $fqdn_to_sync)) {
+            next;
+        }
         $fqdn_to_manifests{$fqdn} ||= [];
         my ($ext) = ($file =~ /\.([a-z]*)$/);
 
@@ -165,6 +170,7 @@ sub synchronise
         }
 
         my %partitions;
+        my %mft_to_files;
         for my $manifest_detail (@manifest_details) {
             my ($file, $hash, $manifest, $aki) = @{$manifest_detail};
 
@@ -177,6 +183,9 @@ sub synchronise
                 this_update     => $tu,
                 locations       => [ "rsync://$file" ]
             );
+            my ($dir) = ($file =~ /^(.*)\/.*/);
+            $mft_to_files{"rsync://$file"} =
+                [ map { $dir."/".$_->{'filename'} } @{$manifest->files()} ];
 
             my @aki_bytes = split //, $aki;
             my $first_byte = $aki_bytes[0];
@@ -196,6 +205,7 @@ sub synchronise
         }
 
         my @pds;
+        my %pt_to_mft_to_file;
         for my $partition (values %partitions) {
             my $pcontent = $partition->encode();
 
@@ -214,11 +224,21 @@ sub synchronise
             my $index_partition_hash = $pdigest_hexdata;
             dprint("Index partition hash is '$index_partition_hash'");
             my $tu = $partition->partition_time();
+            my $size = length($pcontent);
             push @pds, {
                 hash        => $index_partition_hash,
-                size        => length($pcontent),
+                size        => $size,
                 this_update => $partition->partition_time()
             };
+
+            my $pt = "$index_partition_hash-$size";
+            my @manifests = @{$partition->manifest_list()};
+            my @mft_filenames =
+                map { $_->{'locations'}->[0] }
+                    @manifests;
+            $pt_to_mft_to_file{$pt} =
+                +{ map { $_ => $mft_to_files{$_} }
+                    @mft_filenames };
         }
 
         my @tus = sort map { $_->{'this_update'} } @pds;
@@ -235,6 +255,8 @@ sub synchronise
         my $new_path = "$httpd_dir/$index_path/$fqdn";
         $written_files{$new_path} = 1;
         write_file($new_path, $icontent);
+
+        $fqdn_to_pt_to_mft_to_file{$fqdn} = \%pt_to_mft_to_file;
     }
 
     my $dir_count = $self->{'dir_count'} || 0;
@@ -315,7 +337,11 @@ sub synchronise
 
     chdir $dir;
 
-    return 1;
+    if ($fqdn_to_sync) {
+        return $fqdn_to_pt_to_mft_to_file{$fqdn_to_sync};
+    } else {
+        return 1;
+    }
 }
 
 1;

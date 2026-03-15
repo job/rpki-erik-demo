@@ -5,6 +5,7 @@ use strict;
 
 use APNIC::RPKI::Erik::Index;
 use APNIC::RPKI::Erik::Partition;
+use APNIC::RPKI::Erik::Updater;
 use APNIC::RPKI::Manifest;
 use APNIC::RPKI::OpenSSL;
 use APNIC::RPKI::Utils qw(dprint);
@@ -13,6 +14,7 @@ use Cwd qw(cwd);
 use Data::Dumper;
 use Digest::SHA;
 use File::Slurp qw(read_file write_file);
+use File::Temp qw(tempdir);
 use HTTP::Async;
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
 use JSON::XS qw(encode_json decode_json);
@@ -88,15 +90,28 @@ sub synchronise
 
     for my $fqdn (@{$fqdns}) {
         dprint("Requesting index for '$fqdn'");
-        my $mp = "$dir/${fqdn}-metadata";
+        my $previously_synced = 0;
+        if (-e "$dir/$fqdn") {
+            my $fc = scalar(`ls $dir/$fqdn`);
+            if ($fc) {
+                $previously_synced = 1;
+            }
+        }
         my $used_prefetch = 0;
-        if (-e $mp and not $use_snapshots) {
-            my $content = read_file($mp);
-            my $data = decode_json($content);
-            $fqdn_to_pt_to_mft_to_file{$fqdn} = $data;
+        if ($previously_synced and not $use_snapshots) {
+            dprint("Generating partition data for '$fqdn' for synchronising");
+            my $cache_dir = $dir;
+            my $httpd_dir = tempdir();
+            my $updater =
+                APNIC::RPKI::Erik::Updater->new(
+                    $cache_dir, $httpd_dir
+                );
+            $fqdn_to_pt_to_mft_to_file{$fqdn} =
+                $updater->synchronise($fqdn);
+            dprint("Generated partition data for '$fqdn' for synchronising");
             if ($use_ttqs) {
                 my $now = time();
-                my $last_run = (stat($mp))[9];
+                my $last_run = (stat("$dir/$fqdn"))[9];
                 my $diff = $now - $last_run;
                 my $ttq_filename;
                 if ($diff >= 300) {
@@ -270,6 +285,9 @@ sub synchronise
                             for my $file (@{$pt_to_mft_to_file->{$pt}->{$mft}}) {
                                 $relevant_files{$file} = 1;
                             }
+                            my $mft_file = $mft;
+                            $mft_file =~ s/rsync:..//;
+                            $relevant_files{$mft_file} = 1;
                         }
                     } else {
                         dprint("Processing partition '$hash' with size '$size'");
@@ -500,10 +518,6 @@ sub synchronise
             dprint("Removing '$empty_dir' (empty directory)");
             rmdir $empty_dir or die $!;
 	}
-
-        my $mp = "$dir/${fqdn}-metadata";
-        my $metadata = encode_json($fqdn_to_pt_to_mft_to_file{$fqdn});
-        write_file($mp, $metadata);
     }
 
     chdir $cwd;

@@ -189,7 +189,7 @@ sub synchronise
                 [ map { $dir."/".$_->{'filename'} } @{$manifest->files()} ];
 
             my @aki_bytes = split //, $aki;
-            my $first_byte = $aki_bytes[0];
+            my $first_byte = ord $aki_bytes[0];
             my $partition = $partitions{$first_byte};
             if (not $partition) {
                 my $partition = APNIC::RPKI::Erik::Partition->new();

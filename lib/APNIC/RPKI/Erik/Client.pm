@@ -74,7 +74,9 @@ sub synchronise
 
     my $loop = IO::Async::Loop->new();
     my $http = Net::Async::HTTP->new(
-        fail_on_error => 0,
+        fail_on_error            => 0,
+        max_connections_per_host => 8,
+        max_in_flight            => 8,
     );
     $loop->add($http);
 
@@ -203,7 +205,7 @@ sub synchronise
 
     my ($res, $id);
     my $timer = IO::Async::Timer::Periodic->new(
-        interval => 0.5,
+        interval => 0.1,
         on_tick  => sub {
             dprint("Running periodic timer loop: $sent/$received"); 
             while ((@remote_responses and ($res, $id) = @{shift @remote_responses})
@@ -605,7 +607,14 @@ sub synchronise
     $loop->run();
     dprint("Stopped running loop");
     $loop->remove($timer);
+    dprint("Removed timer notifier");
     $loop->remove($http);
+    dprint("Removed HTTP notifier"); 
+    for my $f (@futures) {
+        $f->get();
+    }
+    @futures = ();
+    dprint("Resolved all futures"); 
 
     if (not $ok) {
         return;
@@ -632,6 +641,8 @@ sub synchronise
     }
 
     chdir $cwd;
+
+    dprint("Completed synchronisation");
 
     return { local_file_count    => $ler_file_count,
              local_file_reliance => $ler_file_reliance };

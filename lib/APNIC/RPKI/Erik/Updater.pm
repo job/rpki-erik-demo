@@ -110,7 +110,8 @@ sub synchronise
 
     dprint("Cache directory is '$cache_dir'");
     chdir $cache_dir or die $!;
-    my @files = `find . -type f`;
+    my $find_dir = $fqdn_to_sync || ".";
+    my @files = `find $find_dir -type f`;
     for (@files) {
         chomp;
         s/^\.\///;

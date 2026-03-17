@@ -70,7 +70,7 @@ sub synchronise
     my $dir     = $self->{'dir'};
     my $openssl = $self->{'openssl'};
     my $out_dir = $self->{'out_dir'} || $dir;
-    my $gc      = ($self->{'out_dir'} or (not $self->{'no_gc'})) ? 0 : 1;
+    my $gc      = ($self->{'out_dir'} or $self->{'no_gc'}) ? 0 : 1;
 
     my $cwd = cwd();
 

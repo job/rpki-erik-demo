@@ -450,9 +450,7 @@ sub synchronise
                                     $req->uri(URI->new("file://$o_path"));
                                     my $res = HTTP::Response->new();
                                     $res->request($req);
-                                    $res->code(200);
-                                    my $data = read_file($o_path);
-                                    $res->content($data);
+                                    $res->code(204);
                                     $local_id++;
                                     my $local_id_key = "local_id_$local_id";
                                     $id_to_rmd{$local_id_key} = {
@@ -530,22 +528,30 @@ sub synchronise
                         $ok = 0;
                     } else {
                         chdir $dir or die $!;
+                        my $manifest;
                         if (-e $path) {
                             my $cmft = APNIC::RPKI::Manifest->new();
                             my $cmft_data = $openssl->verify_cms($path);
                             $cmft->decode($cmft_data);
-                            my $nmft = APNIC::RPKI::Manifest->new();
-                            my $ft = File::Temp->new();
-                            my $fn = $ft->filename();
-                            write_file($fn, $res->decoded_content());
-                            my $nmft_data = $openssl->verify_cms($fn);
-                            $nmft->decode($nmft_data);
-                            if ($nmft->manifest_number() < $cmft->manifest_number()) {
+                            $manifest = APNIC::RPKI::Manifest->new();
+                            if ($res->code() == 204) {
+                                my $rpath = $res->uri()->as_string();
+                                $rpath =~ s/^file:\/\///;
+                                my $nmft_data = $openssl->verify_cms($rpath);
+                                $manifest->decode($nmft_data);
+                            } else {
+                                my $ft = File::Temp->new();
+                                my $fn = $ft->filename();
+                                write_file($fn, $res->decoded_content());
+                                my $nmft_data = $openssl->verify_cms($fn);
+                                $manifest->decode($nmft_data);
+                            }
+                            if ($manifest->manifest_number() < $cmft->manifest_number()) {
                                 dprint("Remote manifest is different, ".
                                        "but has smaller manifest ".
                                        "number, skipping");
                                 next;
-                            } elsif ($nmft->this_update() < $cmft->this_update()) {
+                            } elsif ($manifest->this_update() < $cmft->this_update()) {
                                 dprint("Remote manifest is different, ".
                                        "but has older thisUpdate, ".
                                        "skipping");
@@ -553,13 +559,24 @@ sub synchronise
                             }
                         }
                         chdir $out_dir or die $!;
-                        write_file($path, $res->decoded_content());
+                        if ($res->code() == 204) {
+                            my $rpath = $res->request()->uri()->as_string();
+                            $rpath =~ s/^file:\/\///;
+                            my $ress = system("mv $rpath $path");
+                            if ($ress != 0) {
+                                die "Unable to move file: $!";
+                            }
+                        } else {
+                            write_file($path, $res->decoded_content());
+                        }
                         dprint("Fetched manifest '$manifest_url'");
                         dprint("Wrote manifest to path '$path'");
 
-                        my $mdata = $openssl->verify_cms($path);
-                        my $manifest = APNIC::RPKI::Manifest->new();
-                        $manifest->decode($mdata);
+                        if (not $manifest) {
+                            my $mdata = $openssl->verify_cms($path);
+                            $manifest = APNIC::RPKI::Manifest->new();
+                            $manifest->decode($mdata);
+                        }
                         my @files = @{$manifest->files() || []};
                         my $file_count = scalar @files;
                         dprint("Manifest file count: '$file_count'");
@@ -592,9 +609,7 @@ sub synchronise
                                     $req->uri(URI->new("file://$o_path"));
                                     my $res = HTTP::Response->new();
                                     $res->request($req);
-                                    $res->code(200);
-                                    my $data = read_file($o_path);
-                                    $res->content($data);
+                                    $res->code(204);
                                     $local_id++;
                                     my $local_id_key = "local_id_$local_id";
                                     $id_to_rmd{$local_id_key} = {
@@ -642,7 +657,16 @@ sub synchronise
                         $ok = 0;
                     } else {
                         chdir $out_dir or die $!;
-                        write_file($fpath, $res->decoded_content());
+                        if ($res->code() == 204) {
+                            my $rpath = $res->request()->uri()->as_string();
+                            $rpath =~ s/^file:\/\///;
+                            my $ress = system("mv $rpath $fpath");
+                            if ($ress != 0) {
+                                die "Unable to move file: $!";
+                            }
+                        } else {
+                            write_file($fpath, $res->decoded_content());
+                        }
                         dprint("Fetched file '$object_url'");
                         dprint("Wrote file to path '$fpath'");
                     }

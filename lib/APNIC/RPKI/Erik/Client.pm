@@ -130,31 +130,33 @@ sub synchronise
                 my $last_run = (stat("$dir/$fqdn"))[9];
                 my $diff = $now - $last_run;
                 my $ttq_filename;
-                if ($diff >= 300) {
-                    $ttq_filename = "5min";
-                } else {
-                    $ttq_filename = "10min";
-                }
-                my $base_url = "http://$hostname/.well-known";
-                my $ttq_url = "$base_url/erik/tail/$fqdn/$ttq_filename";
-                dprint("Submitting fetch for '$ttq_url'");
-                $remote_id++;
-                my $remote_id_key = "remote_id_$remote_id";
-                my $f = $http->do_request(
-                    uri         => URI->new($ttq_url),
-                    on_response => sub {
-                        my ($resp) = @_;
-                        push @remote_responses, [$resp, $remote_id_key];
+                if ($diff <= 600) {
+                    if ($diff >= 300) {
+                        $ttq_filename = "10min";
+                    } else {
+                        $ttq_filename = "5min";
                     }
-                );
-                push @futures, $f;
-                $sent++;
-                $id_to_rmd{$remote_id_key} = {
-                    type  => 'prefetch',
-                    value => $fqdn
-                };
-                $used_prefetch = 1;
-                dprint("Submitted fetch for '$ttq_url'");
+                    my $base_url = "http://$hostname/.well-known";
+                    my $ttq_url = "$base_url/erik/tail/$fqdn/$ttq_filename";
+                    dprint("Submitting fetch for '$ttq_url'");
+                    $remote_id++;
+                    my $remote_id_key = "remote_id_$remote_id";
+                    my $f = $http->do_request(
+                        uri         => URI->new($ttq_url),
+                        on_response => sub {
+                            my ($resp) = @_;
+                            push @remote_responses, [$resp, $remote_id_key];
+                        }
+                    );
+                    push @futures, $f;
+                    $sent++;
+                    $id_to_rmd{$remote_id_key} = {
+                        type  => 'prefetch',
+                        value => $fqdn
+                    };
+                    $used_prefetch = 1;
+                    dprint("Submitted fetch for '$ttq_url'");
+                }
             }
         } else {
             $fqdn_to_pt_to_mft_to_file{$fqdn} = {};
@@ -201,6 +203,15 @@ sub synchronise
                 value => $fqdn
             };
             dprint("Submitted fetch for '$index_url'");
+        }
+        if (not -e "$dir/$fqdn") {
+            mkdir "$dir/$fqdn" or die $!;
+        }
+        my $time = time();
+        my $res = utime($time, $time, "$dir/$fqdn");
+        if (not $res) {
+            dprint("Unable to set modification time on ".
+                   "cache directory for '$fqdn'");
         }
     }
 

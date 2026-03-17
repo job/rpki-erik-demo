@@ -12,7 +12,7 @@ use DateTime;
 use File::Temp qw(tempdir);
 use File::Slurp qw(read_file write_file);
 
-use Test::More tests => 10;
+use Test::More tests => 12;
 
 my $pid;
 
@@ -43,6 +43,7 @@ my $pid;
         exit(0);
     }
 
+    my $now = time();
     my $otd = tempdir(CLEANUP => 1);
     my $client =
         APNIC::RPKI::Erik::Client->new(
@@ -56,6 +57,10 @@ my $pid;
     ok((not $error),
         "Synchronised remote content successfully");
     diag $error if $error;
+    my $original_mtime = (stat("$otd/rpki.roa.net"))[9];
+    my $time_diff = $original_mtime - $now;
+    ok(($time_diff < 5), 'mtime set correctly on cache directory');
+    sleep(1);
 
     my $diff = sub {
         my @res =
@@ -95,7 +100,11 @@ my $pid;
     # effect) the current time, due to the file copy.
     is($res->{'local_file_reliance'}, 2,
         "Got new files from TTQ");
-    
+
+    my $new_mtime = (stat("$otd/rpki.roa.net"))[9];
+    isnt($new_mtime, $original_mtime,
+        'mtime updated correctly on cache directory');
+ 
     @differences = $diff->();
     ok((not @differences), "Resynchronisation result matches original");
     if (@differences) {

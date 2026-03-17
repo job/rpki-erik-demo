@@ -366,8 +366,6 @@ sub synchronise
                                 dprint("Processing partition '$hash' with size '$size'");
                                 my $partition_url = hash_to_url($hostname, $hash);
                                 dprint("Submitting fetch for partition '$partition_url'");
-                                my $mft_to_file = {};
-                                $pt_to_mft_to_file->{$pt} = $mft_to_file;
                                 $remote_id++;
                                 my $remote_id_key = "remote_id_$remote_id";
                                 $http->do_request(
@@ -380,15 +378,14 @@ sub synchronise
                                 $sent++;
                                 $id_to_rmd{$remote_id_key} = {
                                     type  => 'partition',
-                                    value => [$fqdn, $hash, $size,
-                                            $mft_to_file]
+                                    value => [$fqdn, $hash, $size]
                                 };
                                 dprint("Submitted fetch for partition '$partition_url'");
                             }
                         }
                     }
                 } elsif ($type eq 'partition') {
-                    my ($fqdn, $hash, $size, $mft_to_file) = @{$value};
+                    my ($fqdn, $hash, $size) = @{$value};
                     my $partition_url = $res->request()->uri();
                     if (not $res->is_success()) {
                         dprint("Unable to fetch partition for '$fqdn' ('$hash'): ".
@@ -409,8 +406,6 @@ sub synchronise
                                             locations aki)};
                             my @locs = sort @{$locations};
                             my $location = $locs[0];
-                            my @mft_files;
-                            $mft_to_file->{$location} = \@mft_files;
                             dprint("Processing manifest '$location' (number ".
                                 "'$mftnum', size '$size')");
                             my $uri = URI->new($location);
@@ -418,11 +413,9 @@ sub synchronise
                             $path =~ s/^\///;
                             $path = $uri->host()."/$path";
                             $relevant_files{$path} = 1;
-                            push @mft_files, $path;
                             my ($pdir) = ($path =~ /^(.*)\//);
                             my ($file) = ($path =~ /^.*\/(.*)$/);
-                            chdir $out_dir or die $!;
-                            system("mkdir -p $pdir");
+                            system("mkdir -p $out_dir/$pdir");
                             my $get = 0;
                             if (-e $path) {
                                 my $digest = Digest::SHA->new(256);
@@ -450,7 +443,7 @@ sub synchronise
                                     my $local_id_key = "local_id_$local_id";
                                     $id_to_rmd{$local_id_key} = {
                                         type  => 'manifest',
-                                        value => [$fqdn, $entry, $path, $pdir, \@mft_files]
+                                        value => [$fqdn, $entry, $path, $pdir]
                                     };
                                     push @local_responses, [$res, $local_id_key];
                                     $handled = 1;
@@ -474,7 +467,7 @@ sub synchronise
                                     $sent++;
                                     $id_to_rmd{$remote_id_key} = {
                                         type  => 'manifest',
-                                        value => [$fqdn, $entry, $path, $pdir, \@mft_files]
+                                        value => [$fqdn, $entry, $path, $pdir]
                                     };
 
                                     dprint("Submitted fetch for manifest '$manifest_url'");
@@ -498,7 +491,7 @@ sub synchronise
                         }
                     }
                 } elsif ($type eq 'manifest') {
-                    my ($fqdn, $entry, $path, $pdir, $mft_files) = @{$value};
+                    my ($fqdn, $entry, $path, $pdir) = @{$value};
                     my $manifest_url = $res->request()->uri();
                     if (not $res->is_success()) {
                         dprint("Unable to fetch manifest for '$path': ".
@@ -513,7 +506,7 @@ sub synchronise
                             $cmft->decode($cmft_data);
                             $manifest = APNIC::RPKI::Manifest->new();
                             if ($res->code() == 204) {
-                                my $rpath = $res->uri()->as_string();
+                                my $rpath = $res->request()->uri()->as_string();
                                 $rpath =~ s/^file:\/\///;
                                 my $nmft_data = $openssl->verify_cms($rpath);
                                 $manifest->decode($nmft_data);
@@ -576,7 +569,6 @@ sub synchronise
                                 $get = 1;
                             }
                             $relevant_files{$fpath} = 1;
-                            push @{$mft_files}, $fpath;
                             if ($get) {
                                 my $handled = 0;
                                 my $o_path = hash_to_local_path($ler, $hash);

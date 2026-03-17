@@ -19,7 +19,7 @@ use File::Temp qw(tempdir);
 use IO::Async::Loop;
 use IO::Async::Timer::Periodic;
 use Net::Async::HTTP;
-use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
+use IO::Uncompress::Gunzip qw($GunzipError);
 use JSON::XS qw(encode_json decode_json);
 use LWP::UserAgent;
 use MIME::Base64 qw(encode_base64url);
@@ -235,18 +235,17 @@ sub synchronise
                             my $fn = $ft->filename();
                             write_file($fn, $res->content());
                             $ft->flush();
-                            my $res = system("mv $fn $fn.gz");
-                            if ($res != 0) {
-                                die "unable to move file";
+                            my $res = rename($fn, "$fn.gz");
+                            if (not $res) {
+                                die "Unable to move file";
                             }
-                            $res = system("gunzip $fn.gz");
-                            if ($res != 0) {
-                                die "unable to gunzip file";
+                            my $z = IO::Uncompress::Gunzip->new("$fn.gz");
+                            if (not $z) {
+                                die "$GunzipError";
                             }
-                            open my $fh, '<', $fn or die $!;
                             for (;;) {
                                 my $rfb;
-                                my $n = read($fh, $rfb, 1);
+                                my $n = $z->read($rfb, 1);
                                 if (not $n) {
                                     last;
                                 }
@@ -255,7 +254,7 @@ sub synchronise
                                     die "Expected 0x30 for start of object";
                                 }
                                 my $tlb;
-                                $n = read($fh, $tlb, 1);
+                                $n = $z->read($tlb, 1);
                                 if ($n != 1) {
                                     die "Expected additional byte after object";
                                 }
@@ -264,7 +263,7 @@ sub synchronise
                                 if ($lb <= 127) {
                                     dprint("Got short object in snapshot/TTQ ($lb bytes)");
                                     $new_object = $rfb.$tlb;
-                                    $n = read($fh, $new_object, $lb, 2);
+                                    $n = $z->read($new_object, $lb, 2);
                                     if ($n != $lb) {
                                         die "Expected '$lb' bytes but got '$n'";
                                     }
@@ -273,7 +272,7 @@ sub synchronise
                                     dprint("Got object in snapshot/TTQ ($elb extra ".
                                         "length bytes)");
                                     my $raw_rlb;
-                                    $n = read($fh, $raw_rlb, $elb);
+                                    $n = $z->read($raw_rlb, $elb);
                                     if ($n != $elb) {
                                         die "Expected '$elb' bytes but got '$n'";
                                     }
@@ -290,7 +289,7 @@ sub synchronise
                                         "bytes)");
                                     $new_object = $rfb.$tlb.$raw_rlb;
                                     my $bytes = 2 + $elb;
-                                    $n = read($fh, $new_object, $new_length, length($new_object));
+                                    $n = $z->read($new_object, $new_length, length($new_object));
                                     if ($n != $new_length) {
                                         die "Expected '$new_length' bytes but got '$n'";
                                     }

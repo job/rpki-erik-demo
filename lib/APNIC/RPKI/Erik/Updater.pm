@@ -157,6 +157,7 @@ sub synchronise
         }
     }
 
+    my @partition_ret_data;
     for my $fqdn (keys %fqdn_to_manifests) {
         my @manifest_details = @{$fqdn_to_manifests{$fqdn}};
         my $mc = scalar @manifest_details;
@@ -178,6 +179,7 @@ sub synchronise
         my %mft_to_files;
         for my $manifest_detail (@manifest_details) {
             my ($file, $hash, $manifest, $aki) = @{$manifest_detail};
+            $aki = lc $aki;
 
             my $tu = $manifest->this_update();
             my %mldet = (
@@ -192,8 +194,8 @@ sub synchronise
             $mft_to_files{"rsync://$file"} =
                 [ map { $dir."/".$_->{'filename'} } @{$manifest->files()} ];
 
-            my @aki_bytes = split //, $aki;
-            my $first_byte = ord $aki_bytes[0];
+            my @aki_chars = split //, $aki;
+            my $first_byte = $aki_chars[0].$aki_chars[1];
             my $partition = $partitions{$first_byte};
             if (not $partition) {
                 my $partition = APNIC::RPKI::Erik::Partition->new();
@@ -238,6 +240,9 @@ sub synchronise
                 this_update => $partition->partition_time()
             };
 
+            push @partition_ret_data,
+                 [ $partition, $index_partition_hash, $size ];
+
             my $pt = "$index_partition_hash-$size";
             my @manifests = @{$partition->manifest_list()};
             my @mft_filenames =
@@ -271,7 +276,8 @@ sub synchronise
     if ($fqdn_to_sync) {
         my @files = `find $httpd_dir -type f`;
         dprint("Syncing single FQDN: wrote ".(scalar @files)." files");
-        return $fqdn_to_pt_to_mft_to_file{$fqdn_to_sync};
+        return ($fqdn_to_pt_to_mft_to_file{$fqdn_to_sync},
+                \@partition_ret_data);
     }
 
     my $dir_count = $self->{'dir_count'} || 0;
@@ -352,11 +358,7 @@ sub synchronise
 
     chdir $dir;
 
-    if ($fqdn_to_sync) {
-        return $fqdn_to_pt_to_mft_to_file{$fqdn_to_sync};
-    } else {
-        return 1;
-    }
+    return 1;
 }
 
 1;

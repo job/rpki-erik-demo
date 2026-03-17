@@ -7,6 +7,7 @@ use APNIC::RPKI::Erik::ASN1;
 
 use Convert::ASN1;
 use DateTime;
+use JSON::XS qw(encode_json);
 
 use constant ID_SHA256 => '2.16.840.1.101.3.4.2.1';
 use constant CT_EP     => '1.2.840.113549.1.9.16.1.56';
@@ -108,6 +109,23 @@ sub encode
         die $parser->error();
     }
     return $enc_data;
+}
+
+sub to_json
+{
+    my ($self) = @_;
+
+    my %data = (
+        version        => $self->version(),
+        partition_time => $self->partition_time()->strftime('%F %T'),
+        hash_algorithm => "sha256",
+        manifest_list  => $self->manifest_list()
+    );
+    for my $ml (@{$data{'manifest_list'}}) {
+        $ml->{'this_update'} = $ml->{'this_update'}->strftime('%F %T');
+    }
+
+    return encode_json(\%data);
 }
 
 1;

@@ -3,6 +3,7 @@
 use warnings;
 use strict;
 
+use File::Slurp qw(read_file);
 use Getopt::Long;
 
 use APNIC::RPKI::Erik::Client;
@@ -27,6 +28,9 @@ By default, files that are no longer available remotely will be
 removed from the cache directory.  If --no-gc is set, then those files
 will be left in place.  Specifying --out-dir enables --no-gc
 implicitly.
+
+{fqdn} can be either a literal FQDN, or a file containing a list of
+FQDNs.
 EOF
 
     exit(10);
@@ -57,6 +61,14 @@ my $use_ttqs = exists $options{'use-ttqs'} ? 1 : 0;
 my $out_dir = $options{'out-dir'};
 my $no_gc = $options{'no-gc'};
 
+if (-e $fqdn) {
+    my @lines = read_file($fqdn);
+    chomp for @lines;
+    $fqdn = \@lines;
+} else {
+    $fqdn = [$fqdn];
+}
+
 my $client =
     APNIC::RPKI::Erik::Client->new(
         $cache_dir,
@@ -65,6 +77,6 @@ my $client =
         out_dir       => $out_dir,
         no_gc         => $no_gc,
     );
-$client->synchronise($server, [$fqdn]);
+$client->synchronise($server, $fqdn);
 
 1;

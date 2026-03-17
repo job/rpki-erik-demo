@@ -106,8 +106,6 @@ sub synchronise
     my $sent = 0;
     my $received = 0;
 
-    my @futures;
-
     for my $fqdn (@{$fqdns}) {
         dprint("Requesting index for '$fqdn'");
         my $previously_synced = 0;
@@ -143,14 +141,13 @@ sub synchronise
                     dprint("Submitting fetch for '$ttq_url'");
                     $remote_id++;
                     my $remote_id_key = "remote_id_$remote_id";
-                    my $f = $http->do_request(
+                    $http->do_request(
                         uri         => URI->new($ttq_url),
                         on_response => sub {
                             my ($resp) = @_;
                             push @remote_responses, [$resp, $remote_id_key];
                         }
                     );
-                    push @futures, $f;
                     $sent++;
                     $id_to_rmd{$remote_id_key} = {
                         type  => 'prefetch',
@@ -168,14 +165,13 @@ sub synchronise
                 dprint("Submitting fetch for '$snapshot_url'");
                 $remote_id++;
                 my $remote_id_key = "remote_id_$remote_id";
-                my $f = $http->do_request(
+                $http->do_request(
                     uri         => URI->new($snapshot_url),
                     on_response => sub {
                         my ($resp) = @_;
                         push @remote_responses, [$resp, $remote_id_key];
                     }
                 );
-                push @futures, $f;
                 $sent++;
                 $id_to_rmd{$remote_id_key} = {
                     type  => 'prefetch',
@@ -191,14 +187,13 @@ sub synchronise
             dprint("Submitting fetch for '$index_url'");
             $remote_id++;
             my $remote_id_key = "remote_id_$remote_id";
-            my $f = $http->do_request(
+            $http->do_request(
                 uri         => URI->new($index_url),
                 on_response => sub {
                     my ($resp) = @_;
                     push @remote_responses, [$resp, $remote_id_key];
                 }
             );
-            push @futures, $f;
             $sent++;
             $id_to_rmd{$remote_id_key} = {
                 type  => 'fqdn',
@@ -312,7 +307,8 @@ sub synchronise
                             }
                         };
                         if (my $error = $@) {
-                            die "Unable to process snapshot/TTQ for '$fqdn': $error";
+                            warn "Unable to process snapshot/TTQ for '$fqdn': $error";
+                            warn "Falling back to standard synchronisation for '$fqdn'";
                         }
                     }
                     my $base_url = "http://$hostname/.well-known";
@@ -320,14 +316,13 @@ sub synchronise
                     dprint("Submitting fetch for '$index_url'");
                     $remote_id++;
                     my $remote_id_key = "remote_id_$remote_id";
-                    my $f = $http->do_request(
+                    $http->do_request(
                         uri         => URI->new($index_url),
                         on_response => sub {
                             my ($resp) = @_;
                             push @remote_responses, [$resp, $remote_id_key];
                         }
                     );
-                    push @futures, $f;
                     $sent++;
                     $id_to_rmd{$remote_id_key} = {
                         type  => 'fqdn',
@@ -377,14 +372,13 @@ sub synchronise
                                 $pt_to_mft_to_file->{$pt} = $mft_to_file;
                                 $remote_id++;
                                 my $remote_id_key = "remote_id_$remote_id";
-                                my $f = $http->do_request(
+                                $http->do_request(
                                     uri         => URI->new($partition_url),
                                     on_response => sub {
                                         my ($resp) = @_;
                                         push @remote_responses, [$resp, $remote_id_key];
                                     }
                                 );
-                                push @futures, $f;
                                 $sent++;
                                 $id_to_rmd{$remote_id_key} = {
                                     type  => 'partition',
@@ -477,14 +471,13 @@ sub synchronise
 
                                     $remote_id++;
                                     my $remote_id_key = "remote_id_$remote_id";
-                                    my $f = $http->do_request(
+                                    $http->do_request(
                                         uri         => URI->new($manifest_url),
                                         on_response => sub {
                                             my ($resp) = @_;
                                             push @remote_responses, [$resp, $remote_id_key];
                                         }
                                     );
-                                    push @futures, $f;
                                     $sent++;
                                     $id_to_rmd{$remote_id_key} = {
                                         type  => 'manifest',
@@ -620,14 +613,13 @@ sub synchronise
 
                                     $remote_id++;
                                     my $remote_id_key = "remote_id_$remote_id";
-                                    my $f = $http->do_request(
+                                    $http->do_request(
                                         uri         => URI->new($o_url),
                                         on_response => sub {
                                             my ($resp) = @_;
                                             push @remote_responses, [$resp, $remote_id_key];
                                         }
                                     );
-                                    push @futures, $f;
                                     $sent++;
                                     $id_to_rmd{$remote_id_key} = {
                                         type  => 'object',
@@ -667,11 +659,6 @@ sub synchronise
     dprint("Started running loop");
     $loop->run();
     dprint("Stopped running loop");
-    for my $f (@futures) {
-        $f->get();
-    }
-    @futures = ();
-    dprint("Resolved all futures"); 
     $loop->remove($timer);
     dprint("Removed timer notifier");
     $loop->remove($http);

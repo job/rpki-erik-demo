@@ -46,6 +46,7 @@ apt-get install -y \
     libfuture-asyncawait-perl \
     libnet-async-http-perl \
     libclass-unload-perl \
+    parallel \
     sudo
 apt-get remove -y \
     libfuture-xs-perl

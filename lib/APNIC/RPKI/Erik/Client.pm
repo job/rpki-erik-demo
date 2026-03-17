@@ -354,13 +354,15 @@ sub synchronise
                             if ($pt_to_mft_to_file->{$pt}) {
                                 dprint("Do not need to fetch partition ".
                                     "($hash, $size)");
-                                for my $mft (keys %{$pt_to_mft_to_file->{$pt}}) {
-                                    for my $file (@{$pt_to_mft_to_file->{$pt}->{$mft}}) {
-                                        $relevant_files{$file} = 1;
+                                if ($gc) {
+                                    for my $mft (keys %{$pt_to_mft_to_file->{$pt}}) {
+                                        for my $file (@{$pt_to_mft_to_file->{$pt}->{$mft}}) {
+                                            $relevant_files{$file} = 1;
+                                        }
+                                        my $mft_file = $mft;
+                                        $mft_file =~ s/rsync:..//;
+                                        $relevant_files{$mft_file} = 1;
                                     }
-                                    my $mft_file = $mft;
-                                    $mft_file =~ s/rsync:..//;
-                                    $relevant_files{$mft_file} = 1;
                                 }
                             } else {
                                 dprint("Processing partition '$hash' with size '$size'");
@@ -412,7 +414,9 @@ sub synchronise
                             my $path = $uri->path();
                             $path =~ s/^\///;
                             $path = $uri->host()."/$path";
-                            $relevant_files{$path} = 1;
+                            if ($gc) {
+                                $relevant_files{$path} = 1;
+                            }
                             my ($pdir) = ($path =~ /^(.*)\//);
                             my ($file) = ($path =~ /^.*\/(.*)$/);
                             system("mkdir -p $out_dir/$pdir");
@@ -475,17 +479,19 @@ sub synchronise
                             } else {
                                 dprint("Do not need to fetch manifest '$location'");
 
-                                chdir $dir or die $!;
-                                my $mdata = $openssl->verify_cms($path);
-                                my $manifest = APNIC::RPKI::Manifest->new();
-                                $manifest->decode($mdata);
-                                my @files = @{$manifest->files() || []};
-                                my $file_count = scalar @files;
-                                for my $file (@files) {
-                                    my $filename = $file->{'filename'};
-                                    my $hash = $file->{'hash'};
-                                    my $fpath = "$pdir/$filename";
-                                    $relevant_files{$fpath} = 1;
+                                if ($gc) {
+                                    chdir $dir or die $!;
+                                    my $mdata = $openssl->verify_cms($path);
+                                    my $manifest = APNIC::RPKI::Manifest->new();
+                                    $manifest->decode($mdata);
+                                    my @files = @{$manifest->files() || []};
+                                    my $file_count = scalar @files;
+                                    for my $file (@files) {
+                                        my $filename = $file->{'filename'};
+                                        my $hash = $file->{'hash'};
+                                        my $fpath = "$pdir/$filename";
+                                        $relevant_files{$fpath} = 1;
+                                    }
                                 }
                             }
                         }
@@ -568,7 +574,9 @@ sub synchronise
                             } else {
                                 $get = 1;
                             }
-                            $relevant_files{$fpath} = 1;
+                            if ($gc) {
+                                $relevant_files{$fpath} = 1;
+                            }
                             if ($get) {
                                 my $handled = 0;
                                 my $o_path = hash_to_local_path($ler, $hash);

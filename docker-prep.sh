@@ -45,7 +45,10 @@ apt-get install -y \
     libio-async-perl \
     libfuture-asyncawait-perl \
     libnet-async-http-perl \
+    libclass-unload-perl \
     sudo
+apt-get remove -y \
+    libfuture-xs-perl
 cpanm Set::IntSpan Net::CIDR::Set
 git clone https://github.com/job/rpkitouch
 cd rpkitouch

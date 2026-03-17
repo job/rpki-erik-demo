@@ -22,6 +22,8 @@ use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
 use JSON::XS qw(encode_json decode_json);
 use LWP::UserAgent;
 use MIME::Base64 qw(encode_base64url);
+use Class::Unload;
+Class::Unload->unload('Future::XS');
 
 sub new
 {
@@ -665,15 +667,21 @@ sub synchronise
     dprint("Started running loop");
     $loop->run();
     dprint("Stopped running loop");
-    $loop->remove($timer);
-    dprint("Removed timer notifier");
-    $loop->remove($http);
-    dprint("Removed HTTP notifier"); 
     for my $f (@futures) {
         $f->get();
     }
     @futures = ();
     dprint("Resolved all futures"); 
+    $loop->remove($timer);
+    dprint("Removed timer notifier");
+    $loop->remove($http);
+    dprint("Removed HTTP notifier");
+    $http  = undef;
+    dprint("Undefined HTTP notifier");
+    $timer = undef;
+    dprint("Undefined timer notifier");
+    $loop  = undef;
+    dprint("Undefined loop");
 
     if (not $ok) {
         return;

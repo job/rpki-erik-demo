@@ -9,6 +9,7 @@ use APNIC::RPKI::Erik::Updater;
 use APNIC::RPKI::Manifest;
 use APNIC::RPKI::OpenSSL;
 use APNIC::RPKI::Utils qw(dprint);
+use APNIC::RPKI::CMS;
 
 use Convert::ASN1 qw(asn_read);
 use Cwd qw(cwd);
@@ -231,6 +232,7 @@ sub synchronise
                         dprint("Unable to fetch snapshot/TTQ for '$fqdn': ".Dumper($res));
                     } else {
                         $fqdn_to_ler{$fqdn} = 1;
+                        my %hash_to_path;
                         eval {
                             my $ft = File::Temp->new();
                             my $fn = $ft->filename();
@@ -250,14 +252,66 @@ sub synchronise
                                 if (not $n) {
                                     last;
                                 }
+                                my $wrote = 0;
+                                my $cms = APNIC::RPKI::CMS->new();
+                                eval { $cms->decode($buffer) };
+                                if (not $@) {
+                                    my $type = eval { $cms->type(); };
+                                    $type ||= '';
+                                    if ($type eq 'mft') {
+                                        my $mft =
+                                            APNIC::RPKI::Manifest->new();
+                                        $mft->decode($cms->payload()->{'content'}->{'encapContentInfo'}->{'eContent'});
+                                        my ($mft_path) =
+                                            ($cms->payload()->{'content'}->{'certificates'}->[0]
+                                            =~ /.*rsync:\/\/(.*?mft)/);
+                                        my ($pdir) = ($mft_path =~ /(.*)\//);
+                                        mkpath("$out_dir/$pdir");
+                                        write_file("$out_dir/$mft_path", $buffer);
+                                        dprint("Wrote object directly ($out_dir/$mft_path)");
+                                        $wrote = 1;
+                                        $ler_file_count++;
+                                        $ler_file_reliance++;
+                                        for my $file (@{$mft->files()}) {
+                                            my ($filename, $hash) =
+                                                @{$file}{qw(filename hash)};
+                                            my $final_path = "$out_dir/$pdir/$filename";
 
-                                my $digest = Digest::SHA->new(256);
-                                $digest->add($buffer);
-                                my $digest_data = $digest->clone()->digest();
-                                my $path_segment = encode_base64url($digest_data);
-                                write_file("$ler/$path_segment", $buffer);
-                                dprint("Wrote object to local relay ($path_segment)");
-                                $ler_file_count++;
+                                            my $raw_hash = pack('H*', $hash);
+                                            my $path_segment =
+                                                encode_base64url($raw_hash);
+                                            if (-e "$ler/$path_segment") {
+                                                dprint("Object written to local relay already");
+                                                my $ress = rename("$ler/$path_segment",
+                                                                  $final_path);
+                                                if (not $ress) {
+                                                    die "Unable to move file";
+                                                }
+                                                $ler_file_reliance++;
+                                            } else {
+                                                $hash_to_path{$hash} = $final_path;
+                                                dprint("Adding manifest file to lookup: $hash -> $final_path");
+                                            }
+                                        }
+                                    }
+                                }
+                                if (not $wrote) {
+                                    my $digest = Digest::SHA->new(256);
+                                    $digest->add($buffer);
+                                    my $digest_data = $digest->clone()->digest();
+                                    my $hexdigest = lc $digest->clone()->hexdigest();
+                                    if (my $path = delete $hash_to_path{$hexdigest}) {
+                                        dprint("Found object path in lookup, writing directly ($path)");
+                                        write_file($path, $buffer);
+                                        $ler_file_count++;
+                                        $ler_file_reliance++;
+                                    } else {
+                                        my $path_segment = encode_base64url($digest_data);
+                                        write_file("$ler/$path_segment", $buffer);
+                                        dprint("Wrote object to local relay ($path_segment) ($hexdigest)");
+                                        $ler_file_count++;
+                                    }
+                                }
                             }
                         };
                         if (my $error = $@) {
@@ -291,7 +345,6 @@ sub synchronise
                         $ok = 0;
                     } else {
                         dprint("Fetched index '$index_url'");
-
                         my $index_content = $res->decoded_content();
                         my $index = APNIC::RPKI::Erik::Index->new();
                         $index->decode($index_content);
@@ -377,19 +430,26 @@ sub synchronise
                             my ($file) = ($path =~ /^.*\/(.*)$/);
                             mkpath("$out_dir/$pdir");
                             my $get = 0;
-                            if (-e $path) {
+                            my $read_path;
+                            if (-e "$out_dir/$path") {
+                                # Written by prefetch already, so no
+                                # need to fetch.
+                                $read_path = "$out_dir/$path";
+                            } elsif (-e "$dir/$path") {
                                 my $digest = Digest::SHA->new(256);
-                                $digest->addfile($path);
+                                $digest->addfile("$dir/$path");
                                 my $content = lc $digest->hexdigest();
                                 if ($content ne $hash) {
                                     $get = 1;
+                                } else {
+                                    $read_path = "$dir/$path";
                                 }
                             } else {
                                 $get = 1;
                             }
                             if ($get) {
                                 my $handled = 0;
-                                dprint("Need to fetch manifest '$location'");
+                                dprint("Need to fetch manifest '$location' ($dir/$path)");
                                 my $o_path = hash_to_local_path($ler, $hash);
                                 if (-e $o_path) {
                                     $ler_file_reliance++;
@@ -436,8 +496,7 @@ sub synchronise
                                 dprint("Do not need to fetch manifest '$location'");
 
                                 if ($gc) {
-                                    chdir $dir or die $!;
-                                    my $mdata = $openssl->verify_cms($path);
+                                    my $mdata = $openssl->verify_cms($read_path);
                                     my $manifest = APNIC::RPKI::Manifest->new();
                                     $manifest->decode($mdata);
                                     my @files = @{$manifest->files() || []};
@@ -520,9 +579,12 @@ sub synchronise
                             my $hash = $file->{'hash'};
                             my $fpath = "$pdir/$filename";
                             my $get = 0;
-                            if (-e $fpath) {
+                            if (-e "$out_dir/$fpath") {
+                                # Written by prefetch already, so no
+                                # need to fetch.
+                            } elsif (-e "$dir/$fpath") {
                                 my $digest = Digest::SHA->new(256);
-                                $digest->addfile($fpath);
+                                $digest->addfile("$dir/$fpath");
                                 my $content = lc $digest->hexdigest();
                                 if ($content ne $hash) {
                                     $get = 1;

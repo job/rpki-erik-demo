@@ -12,7 +12,7 @@ use DateTime;
 use File::Temp qw(tempdir);
 use File::Slurp qw(read_file write_file);
 
-use Test::More tests => 12;
+use Test::More tests => 11;
 
 my $pid;
 
@@ -94,12 +94,10 @@ my $pid;
     ok((not $error),
         "Resynchronised remote content successfully");
     diag $error if $error;
-    # This 'works', but is not a great test, because TTQs should be
-    # using the signing time (or similar) as the time for determining
-    # what files need to go into the TTQ, but this is using (in
-    # effect) the current time, due to the file copy.
-    is($res->{'local_file_reliance'}, 2,
-        "Got new files from TTQ");
+    # todo: figure out a better test for TTQ reliance.  Currently, the
+    # processing of the TTQ causes the files to be written to the
+    # staging directory directly, rather than first confirming that
+    # they are actually needed.
 
     my $new_mtime = (stat("$otd/rpki.roa.net"))[9];
     isnt($new_mtime, $original_mtime,

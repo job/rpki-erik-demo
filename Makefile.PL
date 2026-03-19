@@ -38,6 +38,7 @@ my $output = WriteMakefile(
         'Net::CIDR::Set'             => 0,
         'Set::IntSpan'               => 0,
         'IO::Async::Loop'            => 0,
+        'IO::Async::SSL'             => 0,
         'IO::Async::Timer::Periodic' => 0,
         'Net::Async::HTTP'           => 0,
     }

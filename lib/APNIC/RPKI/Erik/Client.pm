@@ -84,6 +84,8 @@ sub synchronise
         fail_on_error            => 0,
         max_connections_per_host => 8,
         max_in_flight            => 8,
+        timeout                  => 15,
+        stall_timeout            => 15,
     );
     $loop->add($http);
 
@@ -147,6 +149,13 @@ sub synchronise
                         on_response => sub {
                             my ($resp) = @_;
                             push @remote_responses, [$resp, $remote_id_key];
+                        },
+                        on_fail => sub {
+                            my ($failure) = @_;
+                            my $res = HTTP::Response->new();
+                            $res->code(500);
+                            $res->content($failure);
+                            push @remote_responses, [$res, $remote_id_key];
                         }
                     );
                     $sent++;
@@ -171,6 +180,13 @@ sub synchronise
                     on_response => sub {
                         my ($resp) = @_;
                         push @remote_responses, [$resp, $remote_id_key];
+                    },
+                    on_fail => sub {
+                        my ($failure) = @_;
+                        my $res = HTTP::Response->new();
+                        $res->code(500);
+                        $res->content($failure);
+                        push @remote_responses, [$res, $remote_id_key];
                     }
                 );
                 $sent++;
@@ -193,6 +209,13 @@ sub synchronise
                 on_response => sub {
                     my ($resp) = @_;
                     push @remote_responses, [$resp, $remote_id_key];
+                },
+                on_fail => sub {
+                    my ($failure) = @_;
+                    my $res = HTTP::Response->new();
+                    $res->code(500);
+                    $res->content($failure);
+                    push @remote_responses, [$res, $remote_id_key];
                 }
             );
             $sent++;
@@ -217,7 +240,8 @@ sub synchronise
     my $timer = IO::Async::Timer::Periodic->new(
         interval => 0.1,
         on_tick  => sub {
-            dprint("Running periodic timer loop: $sent/$received"); 
+            my $ts = POSIX::strftime('%F %T', gmtime(time()));
+            dprint("Running periodic timer loop ($ts): processed $received/$sent");
             while ((@remote_responses and ($res, $id) = @{shift @remote_responses})
                     or (@local_responses and ($res, $id) = @{shift @local_responses})) {
                 if ($id =~ /^remote_/) {
@@ -340,6 +364,13 @@ sub synchronise
                         on_response => sub {
                             my ($resp) = @_;
                             push @remote_responses, [$resp, $remote_id_key];
+                        },
+                        on_fail => sub {
+                            my ($failure) = @_;
+                            my $res = HTTP::Response->new();
+                            $res->code(500);
+                            $res->content($failure);
+                            push @remote_responses, [$res, $remote_id_key];
                         }
                     );
                     $sent++;
@@ -395,6 +426,13 @@ sub synchronise
                                     on_response => sub {
                                         my ($resp) = @_;
                                         push @remote_responses, [$resp, $remote_id_key];
+                                    },
+                                    on_fail => sub {
+                                        my ($failure) = @_;
+                                        my $res = HTTP::Response->new();
+                                        $res->code(500);
+                                        $res->content($failure);
+                                        push @remote_responses, [$res, $remote_id_key];
                                     }
                                 );
                                 $sent++;
@@ -493,6 +531,13 @@ sub synchronise
                                         on_response => sub {
                                             my ($resp) = @_;
                                             push @remote_responses, [$resp, $remote_id_key];
+                                        },
+                                        on_fail => sub {
+                                            my ($failure) = @_;
+                                            my $res = HTTP::Response->new();
+                                            $res->code(500);
+                                            $res->content($failure);
+                                            push @remote_responses, [$res, $remote_id_key];
                                         }
                                     );
                                     $sent++;
@@ -640,6 +685,13 @@ sub synchronise
                                         on_response => sub {
                                             my ($resp) = @_;
                                             push @remote_responses, [$resp, $remote_id_key];
+                                        },
+                                        on_fail => sub {
+                                            my ($failure) = @_;
+                                            my $res = HTTP::Response->new();
+                                            $res->code(500);
+                                            $res->content($failure);
+                                            push @remote_responses, [$res, $remote_id_key];
                                         }
                                     );
                                     $sent++;
@@ -680,7 +732,7 @@ sub synchronise
                 }
             }
             if ($sent == $received) {
-                dprint("Finished processing all requests ($sent, $received)");
+                dprint("Finished processing all requests ($received/$sent)");
                 $loop->stop();
             }
         }

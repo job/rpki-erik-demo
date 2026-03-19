@@ -30,6 +30,9 @@ my $pid;
     ok((not $error),
         "Wrote Erik disk state successfully");
     diag $error if $error;
+    if ($error) {
+        exit();
+    }
 
     my $server = APNIC::RPKI::Erik::Server->new(0, $td);
     my $port = $server->{'port'};

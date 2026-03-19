@@ -12,6 +12,7 @@ use APNIC::RPKI::X509;
 
 use Cwd qw(cwd);
 use Digest::SHA;
+use File::Find;
 use File::Path qw(mkpath);
 use File::Slurp qw(read_file write_file);
 use IO::Compress::Gzip;
@@ -114,32 +115,33 @@ sub synchronise
 
     dprint("Cache directory is '$cache_dir'");
     chdir $cache_dir or die $!;
-    my $find_dir = $fqdn_to_sync || ".";
-    my @files = `find $find_dir -type f`;
-    for (@files) {
-        chomp;
-        s/^\.\///;
-    }
+    my $find_dir = $fqdn_to_sync || "";
     my %fqdn_to_pt_to_mft_to_file;
     my %fqdn_to_manifests;
     my %fqdn_to_path;
     my %written_files;
-    my $file_count = scalar(@files);
-    dprint("Updater file count: '$file_count'");
 
     my @fqdn_to_manifests;
 
-    for my $file (@files) {
-        my ($fqdn) = ($file =~ /^(.*?)\//);
-        if ($fqdn_to_sync and ($fqdn ne $fqdn_to_sync)) {
-            next;
+    find(sub {
+        my $path = $File::Find::name;
+        if (-d $path) {
+            return;
         }
+        my $relpath = $path;
+        dprint("Path is '$path'");
+        $relpath =~ s/^$cache_dir\///;
+        dprint("Relative path is '$relpath'");
+        my ($fqdn) = ($relpath =~ /^(.*?)\//);
+        dprint("FQDN is '$fqdn'");
+        my $file = $relpath;
+
         dprint("Processing file '$file' in updater");
         $fqdn_to_manifests{$fqdn} ||= [];
         my ($ext) = ($file =~ /\.([a-z]*)$/);
 
         my $digest = Digest::SHA->new(256);
-        $digest->addfile($file);
+        $digest->addfile($path);
         my $digest_data = $digest->clone()->digest();
         my $digest_hexdata = $digest->clone()->hexdigest();
         my $path_segment = encode_base64url($digest_data);
@@ -157,12 +159,16 @@ sub synchronise
             push @{$fqdn_to_path{$fqdn}}, $new_path;
             $written_files{$new_path} = 1;
         }
-    }
+
+    }, "$cache_dir/$find_dir");
 
     my @partition_ret_data;
     for my $fqdn (keys %fqdn_to_manifests) {
         my @manifest_details = @{$fqdn_to_manifests{$fqdn}};
         my $mc = scalar @manifest_details;
+
+        my %partitions;
+        my %mft_to_files;
 
         for my $manifest_detail (@manifest_details) {
             my ($file, $hash) = @{$manifest_detail};
@@ -173,7 +179,6 @@ sub synchronise
             $cms->decode($mft_data);
             my $manifest = APNIC::RPKI::Manifest->new();
             $manifest->decode($cms->payload()->{'content'}->{'encapContentInfo'}->{'eContent'});
-            push @{$manifest_detail}, $manifest;
 
             my $ee_cert = $cms->payload()->{'content'}->{'certificates'}->[0];
             my $x509 = APNIC::RPKI::X509->new();
@@ -182,16 +187,8 @@ sub synchronise
                 first { $_->{'extnID'} eq '2.5.29.35' }
                     @{$x509->payload()->{'tbsCertificate'}->{'extensions'}};
             my $aki_raw = $aki_raw_obj->{'extnValue'};
-            my $aki_str = lc(unpack('H*', $aki_raw));
-            $aki_str =~ s/^........//;
-            push @{$manifest_detail}, $aki_str;
-        }
-
-        my %partitions;
-        my %mft_to_files;
-        for my $manifest_detail (@manifest_details) {
-            my ($file, $hash, $manifest, $aki) = @{$manifest_detail};
-            dprint("Processing manifest '$file' for partitioning (part 2)");
+            my $aki = lc(unpack('H*', $aki_raw));
+            $aki =~ s/^........//;
             $aki = lc $aki;
 
             my $tu = $manifest->this_update();
@@ -291,8 +288,6 @@ sub synchronise
     }
 
     if ($fqdn_to_sync) {
-        my @files = `find $httpd_dir -type f`;
-        dprint("Syncing single FQDN: wrote ".(scalar @files)." files");
         return ($fqdn_to_pt_to_mft_to_file{$fqdn_to_sync},
                 \@partition_ret_data);
     }
@@ -363,15 +358,13 @@ sub synchronise
     }
 
     chdir "/" or die $!;
-    @files = `find $httpd_dir -type f`;
-    for my $file (@files) {
-        chomp $file;
-        $file =~ s/^\.\///;
-        if (not $written_files{$file}) {
-            dprint("Removing '$file' (deleted)");
-            unlink $file or die $!;
+    find(sub {
+        my $path = $File::Find::name;
+        if ((-f $path) and (not $written_files{$path})) {
+            dprint("Removing '$path' (deleted)");
+            unlink $path or die $!;
         }
-    }
+    }, $httpd_dir);
 
     chdir $dir;
 

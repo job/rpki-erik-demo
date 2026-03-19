@@ -39,7 +39,7 @@ sub new
 
 sub process_req
 {
-    my ($self, $c) = @_;
+    my ($self, $c, $cc, $dc) = @_;
 
     while (my $r = $c->get_request()) {
         my $method = $r->method();
@@ -47,16 +47,13 @@ sub process_req
         dprint("Received request: '$method' '$path'");
 
         chdir $self->{"httpd_dir"} or die $!;
-        my $metadata = read_file(".well-known/erik/metadata");
-        my $md = decode_json($metadata);
-        my $cc = $md->{'char_count'};
-        my $dc = $md->{'dir_count'};
         $path =~ s/^\///;
 
         my ($remaining_fn) = ($path =~ /^.well-known\/ni\/sha-256\/(.*)$/);
         if ($remaining_fn) {
             my $current_dir = ".well-known/ni/sha-256";
-            while ($dc--) {
+            my $dc_loop = $dc;
+            while ($dc_loop--) {
                 my ($next_chars) = ($remaining_fn =~ /^(.{$cc})/);
                 $remaining_fn =~ s/^.{$cc}//;
                 if (not $remaining_fn) {
@@ -95,9 +92,15 @@ sub run
 {
     my ($self) = @_;
 
+    chdir $self->{"httpd_dir"} or die $!;
+    my $metadata = read_file(".well-known/erik/metadata");
+    my $md = decode_json($metadata);
+    my $cc = $md->{'char_count'};
+    my $dc = $md->{'dir_count'};
+
     my $d = $self->{"d"};
     CONN: while (my $c = $d->accept()) {
-        threads->create(\&process_req, $self, $c)->detach();
+        threads->create(\&process_req, $self, $c, $cc, $dc)->detach();
     }
 
     return 1;

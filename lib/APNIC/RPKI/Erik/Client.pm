@@ -28,6 +28,8 @@ use MIME::Base64 qw(encode_base64url);
 use Class::Unload;
 Class::Unload->unload('Future::XS');
 
+$| = 1;
+
 sub new
 {
     my ($class, $dir, %args) = @_;

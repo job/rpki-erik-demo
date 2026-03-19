@@ -47,11 +47,11 @@ sub new
 
 sub hash_to_url
 {
-    my ($hostname, $hash) = @_;
+    my ($url_prefix, $hash) = @_;
 
     $hash = pack('H*', $hash);
     my $hash_segment = encode_base64url($hash);
-    my $url = "http://$hostname/.well-known/ni/sha-256/$hash_segment";
+    my $url = "$url_prefix/.well-known/ni/sha-256/$hash_segment";
     return $url;
 }
 
@@ -68,6 +68,18 @@ sub hash_to_local_path
 sub synchronise
 {
     my ($self, $hostname, $fqdns) = @_;
+
+    my $host = $hostname;
+    my $port = 80;
+    my $scheme = "http";
+    if ($host =~ /:(\d+)$/) {
+        $port = $1;
+        $host =~ s/:\d+$//;
+        if ($port == 443) {
+            $scheme = "https";
+        }
+    }
+    my $url_prefix = "$scheme://$host:$port";
 
     my $ok = 1;
 
@@ -181,7 +193,7 @@ sub synchronise
                     } else {
                         $ttq_filename = "5min";
                     }
-                    my $base_url = "http://$hostname/.well-known";
+                    my $base_url = "$url_prefix/.well-known";
                     my $ttq_url = "$base_url/erik/tail/$fqdn/$ttq_filename";
                     dprint("Submitting fetch for '$ttq_url'");
                     $remote_id++;
@@ -199,7 +211,7 @@ sub synchronise
         } else {
             $fqdn_to_pt_to_mft_to_file{$fqdn} = {};
             if ($use_snapshots) {
-                my $base_url = "http://$hostname/.well-known";
+                my $base_url = "$url_prefix/.well-known";
                 my $snapshot_url = "$base_url/erik/snapshot/$fqdn";
                 dprint("Submitting fetch for '$snapshot_url'");
                 $remote_id++;
@@ -218,7 +230,7 @@ sub synchronise
             }
         }
         if (not $used_prefetch) {
-            my $base_url = "http://$hostname/.well-known";
+            my $base_url = "$url_prefix/.well-known";
             my $index_url = "$base_url/erik/index/$fqdn";
             dprint("Submitting fetch for '$index_url'");
             $remote_id++;
@@ -362,7 +374,7 @@ sub synchronise
                     $fqdn_to_pt_to_mft_to_file{$fqdn} = $fpmf;
                     dprint("Generated partition data for '$fqdn' for synchronising, after prefetch");
 
-                    my $base_url = "http://$hostname/.well-known";
+                    my $base_url = "$url_prefix/.well-known";
                     my $index_url = "$base_url/erik/index/$fqdn";
                     dprint("Submitting fetch for '$index_url'");
                     $remote_id++;
@@ -413,7 +425,8 @@ sub synchronise
                                 }
                             } else {
                                 dprint("Processing partition '$hash' with size '$size'");
-                                my $partition_url = hash_to_url($hostname, $hash);
+                                my $partition_url =
+                                    hash_to_url($url_prefix, $hash);
                                 dprint("Submitting fetch for partition '$partition_url'");
                                 $remote_id++;
                                 my $remote_id_key = "remote_id_$remote_id";
@@ -504,7 +517,8 @@ sub synchronise
                                     dprint("Did not find '$location' locally");
                                 }
                                 if (not $handled) {
-                                    my $manifest_url = hash_to_url($hostname, $hash);
+                                    my $manifest_url =
+                                        hash_to_url($url_prefix, $hash);
                                     dprint("Submitting fetch for manifest '$manifest_url'");
 
                                     $remote_id++;
@@ -645,7 +659,8 @@ sub synchronise
                                     dprint("Did not find '$filename' locally");
                                 }
                                 if (not $handled) {
-                                    my $o_url = hash_to_url($hostname, $hash);
+                                    my $o_url =
+                                        hash_to_url($url_prefix, $hash);
                                     dprint("Submitting fetch for file '$o_url'");
 
                                     $remote_id++;

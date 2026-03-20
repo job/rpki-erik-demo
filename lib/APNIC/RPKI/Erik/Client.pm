@@ -312,8 +312,10 @@ sub synchronise
                                         $snapshots_done = 1;
                                     }
                                 }
-                                dprint("Halving queue size ($adaptive_mult)");
-                                $adaptive_mult *= 0.5;
+                                if ($adaptive) {
+                                    dprint("Halving queue size ($adaptive_mult)");
+                                    $adaptive_mult *= 0.5;
+                                }
                             },
                             %{$args || {}},
                         );

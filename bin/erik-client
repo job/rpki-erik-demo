@@ -17,6 +17,7 @@ $0 --cache-dir {cache-dir} --server {host[:port]}
    [--use-snapshots] [--use-ttqs] [--out-dir {out-dir}] [--no-gc]
    [--procs {procs}] [--snapshot-procs {snapshot-procs}]
    [--adaptive] [--snapshots-only]
+   [--partition-data-path {partition-data-path}]
 
 Synchronises the local cache against the specified server for the
 specified RPKI repository FQDN.
@@ -42,6 +43,10 @@ are in play when a timeout error is received.
 
 --snapshots-only skips tree synchronisation after loading from
 snapshots.
+
+{partition-data-path} is the output from calling erik-partitioner for
+the FQDNs being synchronised here.  Providing that data will save
+erik-client having to generate it.
 EOF
 
     exit(10);
@@ -53,7 +58,8 @@ GetOptions(\%options, 'cache-dir=s', 'server=s',
                       'use-snapshots', 'use-ttqs',
                       'out-dir=s', 'no-gc',
                       'procs=i', 'snapshot-procs=i',
-                      'adaptive', 'snapshots-only');
+                      'adaptive', 'snapshots-only',
+                      'partition-data-path=s');
 if (not $options{'cache-dir'}) {
     print "Please provide a cache directory.\n";
     usage();
@@ -80,6 +86,7 @@ my $procs = $options{'procs'};
 my $snapshot_procs = $options{'snapshot-procs'};
 my $adaptive = $options{'adaptive'};
 my $snapshots_only = $options{'snapshots-only'};
+my $partition_data_path = $options{'partition-data-path'};
 
 if ($fqdn_path) {
     my @lines = read_file($fqdn_path);
@@ -100,6 +107,7 @@ my $client =
         snapshot_procs => $snapshot_procs,
         adaptive       => $adaptive,
         snapshots_only => $snapshots_only,
+        partition_data_path => $partition_data_path,
     );
 my $res = $client->synchronise($server, $fqdn);
 exit($res->{'success'} ? 0 : -1);

@@ -9,6 +9,7 @@ use APNIC::RPKI::Erik::Partition;
 use APNIC::RPKI::Utils qw(dprint);
 use APNIC::RPKI::OpenSSL;
 use APNIC::RPKI::X509;
+use APNIC::RPKI::CMS;
 
 use Cwd qw(cwd);
 use Digest::SHA;

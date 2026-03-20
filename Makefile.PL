@@ -18,6 +18,7 @@ my $output = WriteMakefile(
         'bin/erik-client',
         'bin/erik-server',
         'bin/erik-updater',
+        'bin/erik-partitioner',
     ],
     PREREQ_PM      => {
         'Test::More'                 => 0,

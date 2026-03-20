@@ -1,0 +1,63 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+use File::Slurp qw(read_file);
+use Getopt::Long;
+use JSON::XS qw(encode_json);
+
+use APNIC::RPKI::Erik::Updater;
+
+sub usage
+{
+    print <<EOF;
+Usage:
+$0 --cache-dir {cache-dir}
+   [--fqdn {fqdn}] [--fqdn-path {fqdn-path}]
+
+Generates partition data for use by erik-client.
+EOF
+
+    exit(10);
+}
+
+my %options;
+GetOptions(\%options, 'cache-dir=s',
+                      'fqdn=s', 'fqdn-path=s');
+if (not $options{'cache-dir'}) {
+    print "Please provide a cache directory.\n";
+    usage();
+}
+if ((not $options{'fqdn'})
+        and (not $options{'fqdn-path'})) {
+    print "Please provide an FQDN or an FQDN file path.\n";
+    usage();
+}
+
+my $cache_dir = $options{'cache-dir'};
+my $fqdn = $options{'fqdn'};
+my $fqdn_path = $options{'fqdn-path'};
+
+if ($fqdn_path) {
+    my @lines = read_file($fqdn_path);
+    chomp for @lines;
+    $fqdn = \@lines;
+} else {
+    $fqdn = [$fqdn];
+}
+
+my %fqdn_to_pt_to_mft_to_file;
+for my $fqdn (@{$fqdn}) {
+    my $updater =
+        APNIC::RPKI::Erik::Updater->new(
+            $cache_dir, undef
+        );
+    my ($pt_to_mft_to_file, undef) =
+        $updater->synchronise($fqdn);
+    $fqdn_to_pt_to_mft_to_file{$fqdn} =
+        $pt_to_mft_to_file;
+}
+print encode_json(\%fqdn_to_pt_to_mft_to_file);
+
+1;

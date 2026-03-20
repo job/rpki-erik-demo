@@ -117,6 +117,13 @@ sub synchronise
     my @remote_responses;
     my $remote_id = 1;
 
+    my $partition_data_path = $self->{'partition_data_path'};
+    if ($partition_data_path) {
+        my $pd_json = read_file($partition_data_path);
+        my $pd = decode_json($pd_json);
+        %fqdn_to_pt_to_mft_to_file = %{$pd};
+    }
+
     my $ler_file_count = 0;
     my $ler_file_reliance = 0;
 
@@ -145,16 +152,6 @@ sub synchronise
         }
         my $used_prefetch = 0;
         if ($previously_synced and not $use_snapshots) {
-            dprint("Generating partition data for '$fqdn' for synchronising");
-            my $cache_dir = $dir;
-            my $httpd_dir = tempdir();
-            my $updater =
-                APNIC::RPKI::Erik::Updater->new(
-                    $cache_dir, $httpd_dir
-                );
-            my ($fpmf, undef) = $updater->synchronise($fqdn);
-            $fqdn_to_pt_to_mft_to_file{$fqdn} = $fpmf;
-            dprint("Generated partition data for '$fqdn' for synchronising");
             if ($use_ttqs) {
                 my $now = time();
                 my $last_run = (stat("$dir/$fqdn"))[9];
@@ -180,9 +177,26 @@ sub synchronise
                     $used_prefetch = 1;
                     dprint("Submitted fetch for '$ttq_url'");
                 }
+            } else {
+                if ($fqdn_to_pt_to_mft_to_file{$fqdn}) {
+                    dprint("Using provided partition data for '$fqdn'");
+                } else {
+                    dprint("Generating partition data for '$fqdn' for synchronising");
+                    my $cache_dir = $dir;
+                    my $httpd_dir = tempdir();
+                    my $updater =
+                        APNIC::RPKI::Erik::Updater->new(
+                            $cache_dir, $httpd_dir
+                        );
+                    my ($fpmf, undef) = $updater->synchronise($fqdn);
+                    $fqdn_to_pt_to_mft_to_file{$fqdn} = $fpmf;
+                    dprint("Generated partition data for '$fqdn' for synchronising");
+                }
             }
         } else {
-            $fqdn_to_pt_to_mft_to_file{$fqdn} = {};
+            if (not $fqdn_to_pt_to_mft_to_file{$fqdn}) {
+                $fqdn_to_pt_to_mft_to_file{$fqdn} = {};
+            }
             if ($use_snapshots) {
                 my $base_url = "$url_prefix/.well-known";
                 my $snapshot_url = "$base_url/erik/snapshot/$fqdn";

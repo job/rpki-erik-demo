@@ -312,7 +312,7 @@ sub synchronise
                                         $snapshots_done = 1;
                                     }
                                 }
-                                if ($adaptive) {
+                                if ($adaptive_procs) {
                                     dprint("Halving queue size ($adaptive_mult)");
                                     $adaptive_mult *= 0.5;
                                 }

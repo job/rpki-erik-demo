@@ -82,6 +82,10 @@ sub synchronise
         }
     }
     my $url_prefix = "$scheme://$host:$port";
+    my $procs = $self->{'procs'} || 16;
+    my $snapshot_procs = $self->{'snapshot_procs'} || 1;
+    my $adaptive_procs = $self->{'adaptive'};
+    my $adaptive_mult = 1;
 
     my $ok = 1;
 
@@ -96,8 +100,8 @@ sub synchronise
     my $loop = IO::Async::Loop->new();
     my $http = Net::Async::HTTP->new(
         fail_on_error            => 0,
-        max_connections_per_host => 16,
-        max_in_flight            => 16,
+        max_connections_per_host => $procs,
+        max_in_flight            => $procs,
         timeout                  => 60,
         stall_timeout            => 15,
     );
@@ -229,7 +233,10 @@ sub synchronise
         interval => 0.1,
         on_tick  => sub {
             if (@pending_requests) {
-                my $qs = ($snapshots_done ? 16 : 1);
+                my $qs = int(($snapshots_done ? $procs : $snapshot_procs) * $adaptive_mult);
+                if ($qs < 1) {
+                    $qs = 1;
+                }
                 my $push = $qs - ($sent - $received);
                 dprint("Push count is '$push' ($received/$sent, $queued, $snapshot_count)");
                 while (($push-- > 0) and @pending_requests) {
@@ -290,6 +297,8 @@ sub synchronise
                                         $snapshots_done = 1;
                                     }
                                 }
+                                dprint("Halving queue size ($adaptive_mult)");
+                                $adaptive_mult *= 0.5;
                             },
                             %{$args || {}},
                         );

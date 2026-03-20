@@ -114,6 +114,9 @@ sub synchronise
         }
     }
 
+    if ($cache_dir !~ /^\//) {
+        $cache_dir = "$dir/$cache_dir";
+    }
     dprint("Cache directory is '$cache_dir'");
     chdir $cache_dir or die $!;
     my $find_dir = $fqdn_to_sync || "";
@@ -171,7 +174,7 @@ sub synchronise
         my %partitions;
         my %mft_to_files;
 
-        for my $manifest_detail (@manifest_details) {
+        for my $manifest_detail (sort { $a->[1] cmp $b->[1] } @manifest_details) {
             my ($file, $hash) = @{$manifest_detail};
             dprint("Processing manifest '$file' for partitioning");
 

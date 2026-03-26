@@ -101,6 +101,7 @@ sub synchronise
 
     my $loop = IO::Async::Loop->new();
     my $http = Net::Async::HTTP->new(
+        user_agent               => "apnic-erik-demo",
         fail_on_error            => 0,
         max_connections_per_host => $procs,
         max_in_flight            => $procs,

@@ -348,7 +348,7 @@ sub synchronise
                     my $fqdn = $value;
                     if (not $res->is_success()) {
                         dprint("Unable to fetch snapshot/TTQ for '$fqdn': ".Dumper($res));
-                        print STDERR "Unable to fetch snapshot/TTQ for '$fqdn': ".$res->status_line()."\n";
+                        print STDERR "Unable to fetch snapshot/TTQ for '$fqdn' via $index_url: ".$res->status_line()."\n";
                         print STDERR "Falling back to non-snapshot synchronisation for '$fqdn'\n";
                     } else {
                         $fqdn_to_ler{$fqdn} = 1;
@@ -471,8 +471,8 @@ sub synchronise
                     my $fqdn = $value;
                     my $pt_to_mft_to_file = $fqdn_to_pt_to_mft_to_file{$fqdn};
                     if (not $res->is_success()) {
-                        dprint("Unable to fetch index for '$fqdn': ".Dumper($res));
-                        print STDERR "Unable to fetch index for '$fqdn': ".$res->status_line()."\n";
+                        dprint("Unable to fetch index for '$fqdn' via $index_url: ".Dumper($res));
+                        print STDERR "Unable to fetch index for '$fqdn' via $index_url: ".$res->status_line()."\n";
                         $ok = 0;
                     } else {
                         dprint("Fetched index '$index_url'");
@@ -525,8 +525,8 @@ sub synchronise
                     my ($fqdn, $hash, $size) = @{$value};
                     my $partition_url = $res->request()->uri();
                     if (not $res->is_success()) {
-                        dprint("Unable to fetch partition for '$fqdn' ('$hash'): ".Dumper($res));
-                        print STDERR "Unable to fetch partition for '$fqdn' ('$hash'): ".$res->status_line()."\n";
+                        dprint("Unable to fetch partition for '$fqdn' ('$hash') via $partition_url: ".Dumper($res));
+                        print STDERR "Unable to fetch partition for '$fqdn' ('$hash') via $partition_url: ".$res->status_line()."\n";
                         $ok = 0;
                     } else {
                         dprint("Fetched partition '$partition_url'");
@@ -656,7 +656,7 @@ sub synchronise
                     my ($fqdn, $entry, $path, $pdir) = @{$value};
                     my $manifest_url = $res->request()->uri();
                     if (not $res->is_success()) {
-                        dprint("Unable to fetch manifest for '$path': ".Dumper($res));
+                        dprint("Unable to fetch manifest for '$path' via $manifest_url: ".Dumper($res));
                         print STDERR "Unable to fetch manifest for '$path' via $manifest_url: ".$res->status_line()."\n";
                         $ok = 0;
                     } else {
@@ -787,8 +787,8 @@ sub synchronise
                     my ($fqdn, $fpath) = @{$value};
                     my $object_url = $res->request()->uri();
                     if (not $res->is_success()) {
-                        dprint("Unable to fetch object for '$fpath': ".Dumper($res));
-                        print STDERR "Unable to fetch object for '$fpath': ".$res->status_line()."\n";
+                        dprint("Unable to fetch object for '$fpath' via $object_url: ".Dumper($res));
+                        print STDERR "Unable to fetch object for '$fpath' via $object_url: ".$res->status_line()."\n";
                         $ok = 0;
                     } else {
                         chdir $out_dir or die $!;

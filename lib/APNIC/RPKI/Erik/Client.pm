@@ -108,6 +108,7 @@ sub synchronise
         max_in_flight            => $procs,
         timeout                  => 60,
         stall_timeout            => 15,
+        pipeline                 => 0,
     );
     $loop->add($http);
 
